@@ -3,181 +3,160 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>LIVE MIX VJ</title>
+<title>LIVE MIX VJ FX</title>
 <style>
-  :root{
-    --bg:#060606;
-    --panel:rgba(12,12,12,.78);
-    --line:rgba(255,255,255,.16);
-    --text:#f4f4f4;
-    --muted:#9b9b9b;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:Helvetica,Arial,sans-serif;overflow:hidden}
-  body{display:flex;flex-direction:column}
-  #stage{
-    position:relative;
-    flex:1;
-    min-height:0;
-    background:#000;
-    overflow:hidden;
-  }
-  canvas{
-    width:100%;
-    height:100%;
-    display:block;
-    background:#000;
-  }
-  #topbar{
-    position:absolute;
-    top:14px;left:14px;right:14px;
-    display:flex;justify-content:space-between;align-items:center;
-    pointer-events:none;
-    z-index:10;
-  }
-  .brand{
-    font-weight:700;
-    letter-spacing:.12em;
-    font-size:14px;
-    text-shadow:0 1px 8px #000;
-  }
-  .status{
-    font-size:11px;color:#ddd;
-    background:rgba(0,0,0,.55);
-    border:1px solid var(--line);
-    border-radius:999px;
-    padding:7px 10px;
-    backdrop-filter:blur(8px);
-  }
-  .panel{
-    height:250px;
-    border-top:1px solid var(--line);
-    background:var(--panel);
-    backdrop-filter:blur(16px);
-    display:grid;
-    grid-template-columns:1fr 1fr 1.15fr;
-    gap:1px;
-  }
-  .section{
-    min-width:0;
-    padding:14px;
-    border-right:1px solid var(--line);
-    overflow:auto;
-  }
-  .section:last-child{border-right:0}
-  h3{
-    margin:0 0 12px;
-    font-size:11px;
-    letter-spacing:.16em;
-    font-weight:700;
-    color:#cfcfcf;
-  }
-  .row{display:grid;grid-template-columns:92px 1fr 46px;gap:8px;align-items:center;margin:9px 0}
-  .row label{font-size:11px;color:#b9b9b9}
-  .value{font-size:10px;color:#aaa;text-align:right;font-variant-numeric:tabular-nums}
-  input[type="range"]{width:100%;accent-color:#fff}
-  input[type="file"]{display:none}
-  button,.filebtn,select{
-    appearance:none;
-    border:1px solid var(--line);
-    background:#151515;
-    color:#eee;
-    border-radius:8px;
-    font:inherit;
-    font-size:11px;
-  }
-  button,.filebtn{
-    padding:9px 10px;
-    cursor:pointer;
-    transition:.15s ease;
-  }
-  button:hover,.filebtn:hover{background:#232323}
-  button.active{background:#eee;color:#111}
-  select{width:100%;padding:8px}
-  .buttonrow{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
-  .filebtn{display:inline-block}
-  .name{
-    font-size:10px;color:#888;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-    max-width:100%;
-    margin-top:6px;
-  }
-  .meter{
-    height:4px;background:#161616;border-radius:99px;overflow:hidden;margin-top:8px
-  }
-  .meter > span{display:block;height:100%;width:0;background:#eee}
-  #videos{display:none}
-  @media (max-width:850px){
-    .panel{height:330px;grid-template-columns:1fr 1fr}
-    .section.mix{grid-column:1/-1;border-top:1px solid var(--line)}
-    .row{grid-template-columns:80px 1fr 42px}
-  }
-  @media (max-width:560px){
-    .panel{height:46vh;grid-template-columns:1fr 1fr}
-    .section{padding:10px}
-    .section.mix{grid-column:1/-1}
-    h3{margin-bottom:8px}
-    .row{margin:6px 0;grid-template-columns:64px 1fr 36px}
-    .brand{font-size:12px}
-  }
+:root{
+  --bg:#050505;
+  --panel:rgba(10,10,10,.88);
+  --line:rgba(255,255,255,.14);
+  --text:#f4f4f4;
+  --muted:#9a9a9a;
+}
+*{box-sizing:border-box}
+html,body{
+  margin:0;width:100%;height:100%;overflow:hidden;
+  background:var(--bg);color:var(--text);
+  font-family:Helvetica,Arial,sans-serif
+}
+body{display:flex;flex-direction:column}
+#stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
+#mixCanvas{width:100%;height:100%;display:block;background:#000}
+#topbar{
+  position:absolute;top:12px;left:12px;right:12px;
+  display:flex;justify-content:space-between;align-items:center;
+  z-index:10;pointer-events:none
+}
+.brand{font-size:13px;font-weight:700;letter-spacing:.13em;text-shadow:0 1px 8px #000}
+.status{
+  font-size:10px;background:rgba(0,0,0,.55);border:1px solid var(--line);
+  padding:7px 10px;border-radius:999px;backdrop-filter:blur(8px)
+}
+
+#panel{
+  height:360px;
+  display:grid;
+  grid-template-columns:1fr 1fr .9fr;
+  background:var(--panel);
+  border-top:1px solid var(--line);
+  backdrop-filter:blur(16px)
+}
+.section{min-width:0;padding:12px;border-right:1px solid var(--line);overflow:auto}
+.section:last-child{border-right:0}
+h3{font-size:11px;letter-spacing:.16em;margin:0 0 10px;color:#ddd}
+h4{
+  font-size:10px;letter-spacing:.13em;margin:15px 0 8px;color:#999;
+  border-top:1px solid var(--line);padding-top:10px
+}
+.buttonrow{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}
+button,.filebtn,select{
+  border:1px solid var(--line);background:#151515;color:#eee;
+  border-radius:7px;font-size:10px;font-family:inherit
+}
+button,.filebtn{padding:8px 9px;cursor:pointer}
+button.active{background:#eee;color:#111}
+button:hover,.filebtn:hover{background:#222}
+input[type=file]{display:none}
+.filebtn{display:inline-block}
+select{padding:7px;width:100%}
+.row{
+  display:grid;
+  grid-template-columns:84px 1fr 42px;
+  gap:7px;align-items:center;margin:7px 0
+}
+.row label{font-size:10px;color:#b7b7b7}
+.value{font-size:9px;color:#888;text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:#fff}
+.name{font-size:9px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:5px 0 7px}
+.fxgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.fxgrid button{width:100%}
+.meter{height:4px;background:#171717;border-radius:99px;overflow:hidden;margin-top:8px}
+.meter span{display:block;width:0;height:100%;background:#eee}
+.tip{font-size:9px;color:#707070;line-height:1.5;margin-top:9px}
+#videos{display:none}
+
+@media(max-width:900px){
+  #panel{height:46vh;grid-template-columns:1fr 1fr}
+  .section.mix{grid-column:1/-1;border-top:1px solid var(--line)}
+}
+@media(max-width:600px){
+  #panel{height:52vh}
+  .section{padding:9px}
+  .row{grid-template-columns:68px 1fr 36px;gap:5px}
+  .brand{font-size:11px}
+}
 </style>
 </head>
 <body>
-
 <div id="stage">
   <canvas id="mixCanvas"></canvas>
   <div id="topbar">
-    <div class="brand">LIVE MIX VJ</div>
+    <div class="brand">LIVE MIX VJ FX</div>
     <div id="status" class="status">READY</div>
   </div>
 </div>
 
-<div class="panel">
-  <section class="section">
+<div id="panel">
+  <section class="section" id="sectionA">
     <h3>VIDEO A</h3>
     <div class="buttonrow">
       <label class="filebtn">LOAD A<input id="fileA" type="file" accept="video/*"></label>
       <button id="playA">PLAY</button>
       <button id="mirrorA">MIRROR</button>
+      <button id="loopA" class="active">LOOP</button>
     </div>
     <div id="nameA" class="name">NO VIDEO</div>
-    <div class="row">
-      <label>OPACITY</label><input id="opacityA" type="range" min="0" max="1" step="0.01" value="1"><span id="opacityAVal" class="value">1.00</span>
+    <div class="row"><label>OPACITY</label><input id="opacityA" type="range" min="0" max="1" step="0.01" value="1"><span id="opacityAVal" class="value"></span></div>
+    <div class="row"><label>SPEED</label><input id="speedA" type="range" min="0.1" max="3" step="0.05" value="1"><span id="speedAVal" class="value"></span></div>
+
+    <h4>FX A</h4>
+    <div class="fxgrid">
+      <button id="rgbA">RGB SHIFT</button>
+      <button id="glitchA">GLITCH</button>
+      <button id="pixelA">PIXELATE</button>
+      <button id="halfA">HALFTONE</button>
+      <button id="feedbackA">FEEDBACK</button>
+      <button id="invertA">INVERT</button>
     </div>
-    <div class="row">
-      <label>SPEED</label><input id="speedA" type="range" min="0.1" max="3" step="0.05" value="1"><span id="speedAVal" class="value">1.00</span>
-    </div>
-    <div class="buttonrow">
-      <button id="loopA" class="active">LOOP</button>
-      <button id="restartA">RESTART</button>
-    </div>
+    <div class="row"><label>RGB</label><input id="rgbAmtA" type="range" min="0" max="40" step="1" value="10"><span id="rgbAmtAVal" class="value"></span></div>
+    <div class="row"><label>GLITCH</label><input id="glitchAmtA" type="range" min="0" max="1" step="0.01" value="0.35"><span id="glitchAmtAVal" class="value"></span></div>
+    <div class="row"><label>PIXEL</label><input id="pixelAmtA" type="range" min="1" max="48" step="1" value="10"><span id="pixelAmtAVal" class="value"></span></div>
+    <div class="row"><label>HALFTONE</label><input id="halfAmtA" type="range" min="3" max="24" step="1" value="8"><span id="halfAmtAVal" class="value"></span></div>
+    <div class="row"><label>FEEDBACK</label><input id="feedbackAmtA" type="range" min="0" max="0.97" step="0.01" value="0.72"><span id="feedbackAmtAVal" class="value"></span></div>
+    <div class="row"><label>HUE</label><input id="hueA" type="range" min="0" max="360" step="1" value="0"><span id="hueAVal" class="value"></span></div>
   </section>
 
-  <section class="section">
+  <section class="section" id="sectionB">
     <h3>VIDEO B</h3>
     <div class="buttonrow">
       <label class="filebtn">LOAD B<input id="fileB" type="file" accept="video/*"></label>
       <button id="playB">PLAY</button>
       <button id="mirrorB">MIRROR</button>
+      <button id="loopB" class="active">LOOP</button>
     </div>
     <div id="nameB" class="name">NO VIDEO</div>
-    <div class="row">
-      <label>OPACITY</label><input id="opacityB" type="range" min="0" max="1" step="0.01" value="1"><span id="opacityBVal" class="value">1.00</span>
+    <div class="row"><label>OPACITY</label><input id="opacityB" type="range" min="0" max="1" step="0.01" value="1"><span id="opacityBVal" class="value"></span></div>
+    <div class="row"><label>SPEED</label><input id="speedB" type="range" min="0.1" max="3" step="0.05" value="1"><span id="speedBVal" class="value"></span></div>
+
+    <h4>FX B</h4>
+    <div class="fxgrid">
+      <button id="rgbB">RGB SHIFT</button>
+      <button id="glitchB">GLITCH</button>
+      <button id="pixelB">PIXELATE</button>
+      <button id="halfB">HALFTONE</button>
+      <button id="feedbackB">FEEDBACK</button>
+      <button id="invertB">INVERT</button>
     </div>
-    <div class="row">
-      <label>SPEED</label><input id="speedB" type="range" min="0.1" max="3" step="0.05" value="1"><span id="speedBVal" class="value">1.00</span>
-    </div>
-    <div class="buttonrow">
-      <button id="loopB" class="active">LOOP</button>
-      <button id="restartB">RESTART</button>
-    </div>
+    <div class="row"><label>RGB</label><input id="rgbAmtB" type="range" min="0" max="40" step="1" value="10"><span id="rgbAmtBVal" class="value"></span></div>
+    <div class="row"><label>GLITCH</label><input id="glitchAmtB" type="range" min="0" max="1" step="0.01" value="0.35"><span id="glitchAmtBVal" class="value"></span></div>
+    <div class="row"><label>PIXEL</label><input id="pixelAmtB" type="range" min="1" max="48" step="1" value="10"><span id="pixelAmtBVal" class="value"></span></div>
+    <div class="row"><label>HALFTONE</label><input id="halfAmtB" type="range" min="3" max="24" step="1" value="8"><span id="halfAmtBVal" class="value"></span></div>
+    <div class="row"><label>FEEDBACK</label><input id="feedbackAmtB" type="range" min="0" max="0.97" step="0.01" value="0.72"><span id="feedbackAmtBVal" class="value"></span></div>
+    <div class="row"><label>HUE</label><input id="hueB" type="range" min="0" max="360" step="1" value="0"><span id="hueBVal" class="value"></span></div>
   </section>
 
   <section class="section mix">
     <h3>MIX / OUTPUT</h3>
-    <div class="row">
-      <label>CROSSFADE</label><input id="crossfade" type="range" min="0" max="1" step="0.01" value="0.5"><span id="crossfadeVal" class="value">0.50</span>
-    </div>
+    <div class="row"><label>CROSSFADE</label><input id="crossfade" type="range" min="0" max="1" step="0.01" value="0.5"><span id="crossfadeVal" class="value"></span></div>
     <div class="row">
       <label>BLEND</label>
       <select id="blendMode">
@@ -193,20 +172,26 @@
         <option value="color-burn">COLOR BURN</option>
         <option value="hard-light">HARD LIGHT</option>
         <option value="soft-light">SOFT LIGHT</option>
-      </select>
-      <span class="value"></span>
+      </select><span></span>
     </div>
-    <div class="row">
-      <label>MASTER</label><input id="master" type="range" min="0" max="1" step="0.01" value="1"><span id="masterVal" class="value">1.00</span>
-    </div>
+    <div class="row"><label>MASTER</label><input id="master" type="range" min="0" max="1" step="0.01" value="1"><span id="masterVal" class="value"></span></div>
+
     <div class="buttonrow">
       <button id="playBoth">PLAY BOTH</button>
       <button id="pauseBoth">PAUSE BOTH</button>
-      <button id="sync">SYNC START</button>
+      <button id="sync">SYNC</button>
       <button id="fullscreen">FULLSCREEN</button>
       <button id="record">● REC</button>
+      <button id="resetFx">RESET FX</button>
     </div>
+
     <div class="meter"><span id="recMeter"></span></div>
+    <div class="tip">
+      SPACE: PLAY/PAUSE BOTH<br>
+      1: A / 2: 50:50 / 3: B<br>
+      Q/W/E/R/T/Y/U = FX A toggle<br>
+      A/S/D/F/G/H/J = FX B toggle
+    </div>
   </section>
 </div>
 
@@ -216,212 +201,408 @@
 </div>
 
 <script>
-const canvas = document.getElementById('mixCanvas');
+const $ = id => document.getElementById(id);
+
+const canvas = $('mixCanvas');
 const ctx = canvas.getContext('2d', {alpha:false});
-const videoA = document.getElementById('videoA');
-const videoB = document.getElementById('videoB');
-const stage = document.getElementById('stage');
-const statusEl = document.getElementById('status');
+const stage = $('stage');
+const statusEl = $('status');
+
+const videoA = $('videoA');
+const videoB = $('videoB');
+
+const fxA = document.createElement('canvas');
+const fxB = document.createElement('canvas');
+const bufA = document.createElement('canvas');
+const bufB = document.createElement('canvas');
+const tmp = document.createElement('canvas');
+const feedbackCanvasA = document.createElement('canvas');
+const feedbackCanvasB = document.createElement('canvas');
+
+const fxa = fxA.getContext('2d');
+const fxb = fxB.getContext('2d');
+const bfa = bufA.getContext('2d');
+const bfb = bufB.getContext('2d');
+const tctx = tmp.getContext('2d');
+const fba = feedbackCanvasA.getContext('2d');
+const fbb = feedbackCanvasB.getContext('2d');
 
 const state = {
   mirrorA:false, mirrorB:false,
-  recording:false, recorder:null, chunks:[], recStart:0
+  recording:false, recorder:null, chunks:[],
+  fxA:{rgb:false,glitch:false,pixel:false,half:false,feedback:false,invert:false},
+  fxB:{rgb:false,glitch:false,pixel:false,half:false,feedback:false,invert:false}
 };
 
 function resize(){
   const r = stage.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.round(r.width * dpr);
-  canvas.height = Math.round(r.height * dpr);
+  const w = Math.max(1, Math.round(r.width*dpr));
+  const h = Math.max(1, Math.round(r.height*dpr));
+  canvas.width=w; canvas.height=h;
+  [fxA,fxB,bufA,bufB,tmp,feedbackCanvasA,feedbackCanvasB].forEach(c=>{c.width=w;c.height=h});
 }
-window.addEventListener('resize', resize);
+window.addEventListener('resize',resize);
 resize();
 
-function coverRect(vw, vh, cw, ch){
-  const s = Math.max(cw/vw, ch/vh);
-  const w = vw*s, h = vh*s;
-  return [(cw-w)/2, (ch-h)/2, w, h];
+function coverRect(vw,vh,cw,ch){
+  const s=Math.max(cw/vw,ch/vh);
+  const w=vw*s,h=vh*s;
+  return [(cw-w)/2,(ch-h)/2,w,h];
 }
-
-function drawVideo(video, opacity, mirror, composite){
-  if (!video.src || video.readyState < 2) return;
-  const [x,y,w,h] = coverRect(video.videoWidth, video.videoHeight, canvas.width, canvas.height);
-  ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
-  ctx.globalCompositeOperation = composite;
+function drawBase(video,c,mirror){
+  c.save();
+  c.clearRect(0,0,c.canvas.width,c.canvas.height);
+  if(!video.src || video.readyState<2){ c.restore(); return false; }
+  const [x,y,w,h]=coverRect(video.videoWidth,video.videoHeight,c.canvas.width,c.canvas.height);
   if(mirror){
-    ctx.translate(canvas.width,0);
-    ctx.scale(-1,1);
-    ctx.drawImage(video, canvas.width-(x+w), y, w, h);
-  }else{
-    ctx.drawImage(video, x,y,w,h);
-  }
-  ctx.restore();
+    c.translate(c.canvas.width,0);
+    c.scale(-1,1);
+    c.drawImage(video,c.canvas.width-(x+w),y,w,h);
+  }else c.drawImage(video,x,y,w,h);
+  c.restore();
+  return true;
 }
 
-function render(){
-  const cross = +crossfade.value;
-  const aOp = +opacityA.value * (1-cross);
-  const bOp = +opacityB.value * cross;
-  const masterOp = +master.value;
+function applyPixelate(src,dst,size){
+  const sw=Math.max(1,Math.floor(src.width/size));
+  const sh=Math.max(1,Math.floor(src.height/size));
+  tmp.width=sw; tmp.height=sh;
+  tctx.imageSmoothingEnabled=false;
+  tctx.clearRect(0,0,sw,sh);
+  tctx.drawImage(src,0,0,sw,sh);
+  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
+  dst.imageSmoothingEnabled=false;
+  dst.drawImage(tmp,0,0,dst.canvas.width,dst.canvas.height);
+  dst.imageSmoothingEnabled=true;
+  tmp.width=canvas.width; tmp.height=canvas.height;
+}
+
+function applyRGBShift(src,dst,amt){
+  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
+  dst.globalCompositeOperation='source-over';
+  dst.globalAlpha=1;
+  dst.drawImage(src,0,0);
+
+  dst.save();
+  dst.globalCompositeOperation='screen';
+  dst.globalAlpha=.72;
+  dst.filter='sepia(1) saturate(10) hue-rotate(-55deg)';
+  dst.drawImage(src,-amt,0);
+  dst.filter='sepia(1) saturate(10) hue-rotate(65deg)';
+  dst.drawImage(src,amt,0);
+  dst.restore();
+  dst.filter='none';
+  dst.globalAlpha=1;
+  dst.globalCompositeOperation='source-over';
+}
+
+function applyGlitch(src,dst,amt,t){
+  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
+  dst.drawImage(src,0,0);
+  if(amt<=0) return;
+  const slices=Math.floor(3+amt*20);
+  const maxShift=10+amt*100;
+  for(let i=0;i<slices;i++){
+    if(Math.random()>0.45+amt*.4) continue;
+    const h=Math.max(2,Math.floor(Math.random()*dst.canvas.height*.08));
+    const y=Math.floor(Math.random()*(dst.canvas.height-h));
+    const shift=(Math.random()*2-1)*maxShift;
+    dst.drawImage(src,0,y,src.width,h,shift,y,src.width,h);
+  }
+  if(Math.random()<amt*.35){
+    dst.save();
+    dst.globalCompositeOperation='difference';
+    dst.globalAlpha=.15+amt*.35;
+    const x=(Math.sin(t*.01)*.5+.5)*18*amt;
+    dst.drawImage(src,x,0);
+    dst.restore();
+  }
+}
+
+function applyHalftone(src,dst,step){
+  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
+
+  const sampleScale=0.18;
+  const sw=Math.max(1,Math.floor(src.width*sampleScale));
+  const sh=Math.max(1,Math.floor(src.height*sampleScale));
+  tmp.width=sw;tmp.height=sh;
+  tctx.drawImage(src,0,0,sw,sh);
+  const data=tctx.getImageData(0,0,sw,sh).data;
+
+  const sx=src.width/sw, sy=src.height/sh;
+  const gap=Math.max(3,step);
+  dst.fillStyle='#000';
+  dst.fillRect(0,0,dst.canvas.width,dst.canvas.height);
+
+  for(let y=0;y<sh;y+=Math.max(1,Math.round(gap/sy))){
+    for(let x=0;x<sw;x+=Math.max(1,Math.round(gap/sx))){
+      const i=(y*sw+x)*4;
+      const r=data[i],g=data[i+1],b=data[i+2];
+      const lum=(r+g+b)/765;
+      const rad=(gap*.52)*(1-lum*.72);
+      dst.fillStyle=`rgb(${r},${g},${b})`;
+      dst.beginPath();
+      dst.arc(x*sx,y*sy,Math.max(.8,rad),0,Math.PI*2);
+      dst.fill();
+    }
+  }
+  tmp.width=canvas.width;tmp.height=canvas.height;
+}
+
+function applyColorFilters(src,dst,hue,invert){
+  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
+  dst.save();
+  dst.filter=`hue-rotate(${hue}deg) ${invert?'invert(1)':'invert(0)'}`;
+  dst.drawImage(src,0,0);
+  dst.restore();
+  dst.filter='none';
+}
+
+function applyFeedback(src,dst,feedbackCtx,amt){
+  feedbackCtx.save();
+  feedbackCtx.globalAlpha=amt;
+  feedbackCtx.globalCompositeOperation='source-over';
+  feedbackCtx.drawImage(feedbackCtx.canvas,-2,-2,feedbackCtx.canvas.width+4,feedbackCtx.canvas.height+4);
+  feedbackCtx.globalAlpha=1;
+  feedbackCtx.globalCompositeOperation='screen';
+  feedbackCtx.drawImage(src,0,0);
+  feedbackCtx.restore();
+
+  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
+  dst.drawImage(feedbackCtx.canvas,0,0);
+}
+
+function processChannel(video,mirror,fxState,controls,outCtx,bufCtx,feedbackCtx,t){
+  if(!drawBase(video,bufCtx,mirror)){
+    outCtx.clearRect(0,0,outCtx.canvas.width,outCtx.canvas.height);
+    return;
+  }
+
+  let src=bufCtx.canvas;
+  let dst=outCtx;
+  const scratch=bufCtx===bfa?fxa:fxb;
+  const alt=bufCtx===bfa?bfa:bfb;
+
+  // start with color filters
+  applyColorFilters(src,dst,+controls.hue.value,fxState.invert);
+  src=dst.canvas;
+
+  if(fxState.pixel){
+    applyPixelate(src,alt,+controls.pixelAmt.value);
+    src=alt.canvas;
+  }
+  if(fxState.rgb){
+    applyRGBShift(src,dst,+controls.rgbAmt.value);
+    src=dst.canvas;
+  }
+  if(fxState.glitch){
+    applyGlitch(src,alt,+controls.glitchAmt.value,t);
+    src=alt.canvas;
+  }
+  if(fxState.half){
+    applyHalftone(src,dst,+controls.halfAmt.value);
+    src=dst.canvas;
+  }
+  if(fxState.feedback){
+    applyFeedback(src,alt,feedbackCtx,+controls.feedbackAmt.value);
+    src=alt.canvas;
+  }
+
+  if(src!==outCtx.canvas){
+    outCtx.clearRect(0,0,outCtx.canvas.width,outCtx.canvas.height);
+    outCtx.drawImage(src,0,0);
+  }
+}
+
+const controlsA={
+  hue:$('hueA'), rgbAmt:$('rgbAmtA'), glitchAmt:$('glitchAmtA'),
+  pixelAmt:$('pixelAmtA'), halfAmt:$('halfAmtA'), feedbackAmt:$('feedbackAmtA')
+};
+const controlsB={
+  hue:$('hueB'), rgbAmt:$('rgbAmtB'), glitchAmt:$('glitchAmtB'),
+  pixelAmt:$('pixelAmtB'), halfAmt:$('halfAmtB'), feedbackAmt:$('feedbackAmtB')
+};
+
+function render(t=0){
+  processChannel(videoA,state.mirrorA,state.fxA,controlsA,fxa,bfa,fba,t);
+  processChannel(videoB,state.mirrorB,state.fxB,controlsB,fxb,bfb,fbb,t);
 
   ctx.globalCompositeOperation='source-over';
   ctx.globalAlpha=1;
   ctx.fillStyle='#000';
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
+  const cross=+$('crossfade').value;
+  const master=+$('master').value;
+
   ctx.save();
-  ctx.globalAlpha = masterOp;
-  drawVideo(videoA, aOp, state.mirrorA, 'source-over');
-  drawVideo(videoB, bOp, state.mirrorB, blendMode.value);
+  ctx.globalAlpha=(1-cross)*+$('opacityA').value*master;
+  ctx.globalCompositeOperation='source-over';
+  ctx.drawImage(fxA,0,0);
+
+  ctx.globalAlpha=cross*+$('opacityB').value*master;
+  ctx.globalCompositeOperation=$('blendMode').value;
+  ctx.drawImage(fxB,0,0);
   ctx.restore();
 
   if(state.recording){
-    const t = performance.now() - state.recStart;
-    recMeter.style.width = ((t % 2000) / 2000 * 100) + '%';
-  } else {
-    recMeter.style.width = '0%';
-  }
+    $('recMeter').style.width=((performance.now()-state.recStart)%2000)/20+'%';
+  }else $('recMeter').style.width='0%';
+
   requestAnimationFrame(render);
 }
-render();
+requestAnimationFrame(render);
 
-function loadVideo(input, video, nameEl){
-  const file = input.files?.[0];
-  if(!file) return;
-  if(video.dataset.url) URL.revokeObjectURL(video.dataset.url);
-  const url = URL.createObjectURL(file);
-  video.dataset.url = url;
-  video.src = url;
-  video.loop = true;
+function loadVideo(input,video,nameEl){
+  const file=input.files?.[0];
+  if(!file)return;
+  if(video.dataset.url)URL.revokeObjectURL(video.dataset.url);
+  const url=URL.createObjectURL(file);
+  video.dataset.url=url;
+  video.src=url;
+  video.loop=true;
   video.load();
-  nameEl.textContent = file.name;
-  video.addEventListener('loadeddata', ()=> {
+  nameEl.textContent=file.name;
+  video.addEventListener('loadeddata',()=>{
     video.play().catch(()=>{});
-    statusEl.textContent = 'LIVE';
-  }, {once:true});
+    statusEl.textContent='LIVE';
+  },{once:true});
 }
+$('fileA').onchange=()=>loadVideo($('fileA'),videoA,$('nameA'));
+$('fileB').onchange=()=>loadVideo($('fileB'),videoB,$('nameB'));
 
-fileA.addEventListener('change',()=>loadVideo(fileA,videoA,nameA));
-fileB.addEventListener('change',()=>loadVideo(fileB,videoB,nameB));
-
-function togglePlay(video, btn){
-  if(!video.src) return;
-  if(video.paused){ video.play(); btn.textContent='PAUSE'; }
-  else{ video.pause(); btn.textContent='PLAY'; }
+function togglePlay(video,btn){
+  if(!video.src)return;
+  if(video.paused){video.play();btn.textContent='PAUSE'}
+  else{video.pause();btn.textContent='PLAY'}
 }
-playA.onclick=()=>togglePlay(videoA,playA);
-playB.onclick=()=>togglePlay(videoB,playB);
-
-playBoth.onclick=()=>{
-  if(videoA.src) videoA.play();
-  if(videoB.src) videoB.play();
-  playA.textContent='PAUSE'; playB.textContent='PAUSE';
+$('playA').onclick=()=>togglePlay(videoA,$('playA'));
+$('playB').onclick=()=>togglePlay(videoB,$('playB'));
+$('playBoth').onclick=()=>{
+  if(videoA.src)videoA.play();
+  if(videoB.src)videoB.play();
+  $('playA').textContent='PAUSE';$('playB').textContent='PAUSE'
 };
-pauseBoth.onclick=()=>{
-  videoA.pause(); videoB.pause();
-  playA.textContent='PLAY'; playB.textContent='PLAY';
+$('pauseBoth').onclick=()=>{
+  videoA.pause();videoB.pause();
+  $('playA').textContent='PLAY';$('playB').textContent='PLAY'
 };
-sync.onclick=()=>{
-  if(videoA.src) videoA.currentTime=0;
-  if(videoB.src) videoB.currentTime=0;
-  if(videoA.src) videoA.play();
-  if(videoB.src) videoB.play();
-  playA.textContent='PAUSE'; playB.textContent='PAUSE';
+$('sync').onclick=()=>{
+  if(videoA.src)videoA.currentTime=0;
+  if(videoB.src)videoB.currentTime=0;
+  if(videoA.src)videoA.play();
+  if(videoB.src)videoB.play();
 };
 
-restartA.onclick=()=>{ if(videoA.src){videoA.currentTime=0;videoA.play();} };
-restartB.onclick=()=>{ if(videoB.src){videoB.currentTime=0;videoB.play();} };
+$('mirrorA').onclick=()=>{state.mirrorA=!state.mirrorA;$('mirrorA').classList.toggle('active',state.mirrorA)};
+$('mirrorB').onclick=()=>{state.mirrorB=!state.mirrorB;$('mirrorB').classList.toggle('active',state.mirrorB)};
+$('loopA').onclick=()=>{videoA.loop=!videoA.loop;$('loopA').classList.toggle('active',videoA.loop)};
+$('loopB').onclick=()=>{videoB.loop=!videoB.loop;$('loopB').classList.toggle('active',videoB.loop)};
 
-loopA.onclick=()=>{
-  videoA.loop=!videoA.loop;
-  loopA.classList.toggle('active',videoA.loop);
-};
-loopB.onclick=()=>{
-  videoB.loop=!videoB.loop;
-  loopB.classList.toggle('active',videoB.loop);
-};
-
-mirrorA.onclick=()=>{
-  state.mirrorA=!state.mirrorA;
-  mirrorA.classList.toggle('active',state.mirrorA);
-};
-mirrorB.onclick=()=>{
-  state.mirrorB=!state.mirrorB;
-  mirrorB.classList.toggle('active',state.mirrorB);
-};
-
-function bindRange(el,valEl,callback){
-  const update=()=>{
-    valEl.textContent=(+el.value).toFixed(2);
-    callback && callback(+el.value);
-  };
-  el.addEventListener('input',update); update();
+function toggleFx(which,key,btn){
+  state[which][key]=!state[which][key];
+  btn.classList.toggle('active',state[which][key]);
 }
-bindRange(opacityA,opacityAVal);
-bindRange(opacityB,opacityBVal);
-bindRange(speedA,speedAVal,v=>videoA.playbackRate=v);
-bindRange(speedB,speedBVal,v=>videoB.playbackRate=v);
-bindRange(crossfade,crossfadeVal);
-bindRange(master,masterVal);
+const mapA=[
+  ['rgbA','rgb'],['glitchA','glitch'],['pixelA','pixel'],
+  ['halfA','half'],['feedbackA','feedback'],['invertA','invert']
+];
+const mapB=[
+  ['rgbB','rgb'],['glitchB','glitch'],['pixelB','pixel'],
+  ['halfB','half'],['feedbackB','feedback'],['invertB','invert']
+];
+mapA.forEach(([id,key])=>$(id).onclick=()=>toggleFx('fxA',key,$(id)));
+mapB.forEach(([id,key])=>$(id).onclick=()=>toggleFx('fxB',key,$(id)));
 
-fullscreen.onclick=async()=>{
+function bindRange(id,valId,cb){
+  const el=$(id), val=$(valId);
+  const update=()=>{val.textContent=(+el.value).toFixed(el.step && +el.step<1?2:0);cb&&cb(+el.value)};
+  el.oninput=update;update();
+}
+[
+  ['opacityA','opacityAVal'],['speedA','speedAVal',v=>videoA.playbackRate=v],
+  ['rgbAmtA','rgbAmtAVal'],['glitchAmtA','glitchAmtAVal'],
+  ['pixelAmtA','pixelAmtAVal'],['halfAmtA','halfAmtAVal'],
+  ['feedbackAmtA','feedbackAmtAVal'],['hueA','hueAVal'],
+  ['opacityB','opacityBVal'],['speedB','speedBVal',v=>videoB.playbackRate=v],
+  ['rgbAmtB','rgbAmtBVal'],['glitchAmtB','glitchAmtBVal'],
+  ['pixelAmtB','pixelAmtBVal'],['halfAmtB','halfAmtBVal'],
+  ['feedbackAmtB','feedbackAmtBVal'],['hueB','hueBVal'],
+  ['crossfade','crossfadeVal'],['master','masterVal']
+].forEach(args=>bindRange(...args));
+
+$('resetFx').onclick=()=>{
+  for(const k in state.fxA)state.fxA[k]=false;
+  for(const k in state.fxB)state.fxB[k]=false;
+  [...mapA,...mapB].forEach(([id])=>$(id).classList.remove('active'));
+  $('hueA').value=0;$('hueB').value=0;
+  $('rgbAmtA').value=10;$('rgbAmtB').value=10;
+  $('glitchAmtA').value=.35;$('glitchAmtB').value=.35;
+  $('pixelAmtA').value=10;$('pixelAmtB').value=10;
+  $('halfAmtA').value=8;$('halfAmtB').value=8;
+  $('feedbackAmtA').value=.72;$('feedbackAmtB').value=.72;
+  document.querySelectorAll('input[type=range]').forEach(el=>el.dispatchEvent(new Event('input')));
+  fba.clearRect(0,0,feedbackCanvasA.width,feedbackCanvasA.height);
+  fbb.clearRect(0,0,feedbackCanvasB.width,feedbackCanvasB.height);
+};
+
+$('fullscreen').onclick=async()=>{
   try{
-    if(!document.fullscreenElement) await stage.requestFullscreen();
+    if(!document.fullscreenElement)await stage.requestFullscreen();
     else await document.exitFullscreen();
-  }catch(e){console.warn(e);}
+  }catch(e){console.warn(e)}
 };
 
-record.onclick=()=>{
-  if(state.recording){
-    state.recorder?.stop();
-    return;
-  }
-  if(!canvas.captureStream || !window.MediaRecorder){
+$('record').onclick=()=>{
+  if(state.recording){state.recorder?.stop();return}
+  if(!canvas.captureStream||!window.MediaRecorder){
     alert('このブラウザは録画に対応していません。Chrome / Edge を推奨します。');
     return;
   }
-
-  const stream = canvas.captureStream(60);
-  let mime = 'video/webm;codecs=vp9';
-  if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm;codecs=vp8';
-  if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
-
-  const recorder = new MediaRecorder(stream, {mimeType:mime, videoBitsPerSecond:12000000});
-  state.recorder=recorder;
-  state.chunks=[];
-  recorder.ondataavailable=e=>{ if(e.data.size) state.chunks.push(e.data); };
+  const stream=canvas.captureStream(60);
+  let mime='video/webm;codecs=vp9';
+  if(!MediaRecorder.isTypeSupported(mime))mime='video/webm;codecs=vp8';
+  if(!MediaRecorder.isTypeSupported(mime))mime='video/webm';
+  const recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:12000000});
+  state.recorder=recorder;state.chunks=[];
+  recorder.ondataavailable=e=>{if(e.data.size)state.chunks.push(e.data)};
   recorder.onstop=()=>{
-    const blob = new Blob(state.chunks,{type:recorder.mimeType});
+    const blob=new Blob(state.chunks,{type:recorder.mimeType});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
-    a.href=url;
-    a.download='live-mix-vj.webm';
-    a.click();
+    a.href=url;a.download='live-mix-vj-fx.webm';a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
     state.recording=false;
-    record.textContent='● REC';
-    record.classList.remove('active');
+    $('record').textContent='● REC';
+    $('record').classList.remove('active');
     statusEl.textContent='LIVE';
   };
   recorder.start(1000);
   state.recording=true;
   state.recStart=performance.now();
-  record.textContent='■ STOP';
-  record.classList.add('active');
+  $('record').textContent='■ STOP';
+  $('record').classList.add('active');
   statusEl.textContent='REC';
 };
 
 document.addEventListener('keydown',e=>{
+  if(['INPUT','SELECT'].includes(document.activeElement.tagName))return;
   if(e.code==='Space'){
     e.preventDefault();
-    if(videoA.paused && videoB.paused) playBoth.click();
-    else pauseBoth.click();
+    if(videoA.paused&&videoB.paused)$('playBoth').click();
+    else $('pauseBoth').click();
   }
-  if(e.key==='1') crossfade.value=0;
-  if(e.key==='2') crossfade.value=.5;
-  if(e.key==='3') crossfade.value=1;
-  crossfade.dispatchEvent(new Event('input'));
+  if(e.key==='1')$('crossfade').value=0;
+  if(e.key==='2')$('crossfade').value=.5;
+  if(e.key==='3')$('crossfade').value=1;
+  if(['1','2','3'].includes(e.key))$('crossfade').dispatchEvent(new Event('input'));
+
+  const keysA={q:'rgbA',w:'glitchA',e:'pixelA',r:'halfA',t:'feedbackA',y:'invertA'};
+  const keysB={a:'rgbB',s:'glitchB',d:'pixelB',f:'halfB',g:'feedbackB',h:'invertB'};
+  const k=e.key.toLowerCase();
+  if(keysA[k])$(keysA[k]).click();
+  if(keysB[k])$(keysB[k]).click();
 });
 </script>
 </body>
