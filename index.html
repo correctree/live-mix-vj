@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>LIVE MIX VJ</title>
+<style>
+  :root{
+    --bg:#060606;
+    --panel:rgba(12,12,12,.78);
+    --line:rgba(255,255,255,.16);
+    --text:#f4f4f4;
+    --muted:#9b9b9b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:Helvetica,Arial,sans-serif;overflow:hidden}
+  body{display:flex;flex-direction:column}
+  #stage{
+    position:relative;
+    flex:1;
+    min-height:0;
+    background:#000;
+    overflow:hidden;
+  }
+  canvas{
+    width:100%;
+    height:100%;
+    display:block;
+    background:#000;
+  }
+  #topbar{
+    position:absolute;
+    top:14px;left:14px;right:14px;
+    display:flex;justify-content:space-between;align-items:center;
+    pointer-events:none;
+    z-index:10;
+  }
+  .brand{
+    font-weight:700;
+    letter-spacing:.12em;
+    font-size:14px;
+    text-shadow:0 1px 8px #000;
+  }
+  .status{
+    font-size:11px;color:#ddd;
+    background:rgba(0,0,0,.55);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:7px 10px;
+    backdrop-filter:blur(8px);
+  }
+  .panel{
+    height:250px;
+    border-top:1px solid var(--line);
+    background:var(--panel);
+    backdrop-filter:blur(16px);
+    display:grid;
+    grid-template-columns:1fr 1fr 1.15fr;
+    gap:1px;
+  }
+  .section{
+    min-width:0;
+    padding:14px;
+    border-right:1px solid var(--line);
+    overflow:auto;
+  }
+  .section:last-child{border-right:0}
+  h3{
+    margin:0 0 12px;
+    font-size:11px;
+    letter-spacing:.16em;
+    font-weight:700;
+    color:#cfcfcf;
+  }
+  .row{display:grid;grid-template-columns:92px 1fr 46px;gap:8px;align-items:center;margin:9px 0}
+  .row label{font-size:11px;color:#b9b9b9}
+  .value{font-size:10px;color:#aaa;text-align:right;font-variant-numeric:tabular-nums}
+  input[type="range"]{width:100%;accent-color:#fff}
+  input[type="file"]{display:none}
+  button,.filebtn,select{
+    appearance:none;
+    border:1px solid var(--line);
+    background:#151515;
+    color:#eee;
+    border-radius:8px;
+    font:inherit;
+    font-size:11px;
+  }
+  button,.filebtn{
+    padding:9px 10px;
+    cursor:pointer;
+    transition:.15s ease;
+  }
+  button:hover,.filebtn:hover{background:#232323}
+  button.active{background:#eee;color:#111}
+  select{width:100%;padding:8px}
+  .buttonrow{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
+  .filebtn{display:inline-block}
+  .name{
+    font-size:10px;color:#888;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    max-width:100%;
+    margin-top:6px;
+  }
+  .meter{
+    height:4px;background:#161616;border-radius:99px;overflow:hidden;margin-top:8px
+  }
+  .meter > span{display:block;height:100%;width:0;background:#eee}
+  #videos{display:none}
+  @media (max-width:850px){
+    .panel{height:330px;grid-template-columns:1fr 1fr}
+    .section.mix{grid-column:1/-1;border-top:1px solid var(--line)}
+    .row{grid-template-columns:80px 1fr 42px}
+  }
+  @media (max-width:560px){
+    .panel{height:46vh;grid-template-columns:1fr 1fr}
+    .section{padding:10px}
+    .section.mix{grid-column:1/-1}
+    h3{margin-bottom:8px}
+    .row{margin:6px 0;grid-template-columns:64px 1fr 36px}
+    .brand{font-size:12px}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="mixCanvas"></canvas>
+  <div id="topbar">
+    <div class="brand">LIVE MIX VJ</div>
+    <div id="status" class="status">READY</div>
+  </div>
+</div>
+
+<div class="panel">
+  <section class="section">
+    <h3>VIDEO A</h3>
+    <div class="buttonrow">
+      <label class="filebtn">LOAD A<input id="fileA" type="file" accept="video/*"></label>
+      <button id="playA">PLAY</button>
+      <button id="mirrorA">MIRROR</button>
+    </div>
+    <div id="nameA" class="name">NO VIDEO</div>
+    <div class="row">
+      <label>OPACITY</label><input id="opacityA" type="range" min="0" max="1" step="0.01" value="1"><span id="opacityAVal" class="value">1.00</span>
+    </div>
+    <div class="row">
+      <label>SPEED</label><input id="speedA" type="range" min="0.1" max="3" step="0.05" value="1"><span id="speedAVal" class="value">1.00</span>
+    </div>
+    <div class="buttonrow">
+      <button id="loopA" class="active">LOOP</button>
+      <button id="restartA">RESTART</button>
+    </div>
+  </section>
+
+  <section class="section">
+    <h3>VIDEO B</h3>
+    <div class="buttonrow">
+      <label class="filebtn">LOAD B<input id="fileB" type="file" accept="video/*"></label>
+      <button id="playB">PLAY</button>
+      <button id="mirrorB">MIRROR</button>
+    </div>
+    <div id="nameB" class="name">NO VIDEO</div>
+    <div class="row">
+      <label>OPACITY</label><input id="opacityB" type="range" min="0" max="1" step="0.01" value="1"><span id="opacityBVal" class="value">1.00</span>
+    </div>
+    <div class="row">
+      <label>SPEED</label><input id="speedB" type="range" min="0.1" max="3" step="0.05" value="1"><span id="speedBVal" class="value">1.00</span>
+    </div>
+    <div class="buttonrow">
+      <button id="loopB" class="active">LOOP</button>
+      <button id="restartB">RESTART</button>
+    </div>
+  </section>
+
+  <section class="section mix">
+    <h3>MIX / OUTPUT</h3>
+    <div class="row">
+      <label>CROSSFADE</label><input id="crossfade" type="range" min="0" max="1" step="0.01" value="0.5"><span id="crossfadeVal" class="value">0.50</span>
+    </div>
+    <div class="row">
+      <label>BLEND</label>
+      <select id="blendMode">
+        <option value="source-over">NORMAL</option>
+        <option value="screen">SCREEN</option>
+        <option value="multiply">MULTIPLY</option>
+        <option value="overlay">OVERLAY</option>
+        <option value="lighten">LIGHTEN</option>
+        <option value="darken">DARKEN</option>
+        <option value="difference">DIFFERENCE</option>
+        <option value="exclusion">EXCLUSION</option>
+        <option value="color-dodge">COLOR DODGE</option>
+        <option value="color-burn">COLOR BURN</option>
+        <option value="hard-light">HARD LIGHT</option>
+        <option value="soft-light">SOFT LIGHT</option>
+      </select>
+      <span class="value"></span>
+    </div>
+    <div class="row">
+      <label>MASTER</label><input id="master" type="range" min="0" max="1" step="0.01" value="1"><span id="masterVal" class="value">1.00</span>
+    </div>
+    <div class="buttonrow">
+      <button id="playBoth">PLAY BOTH</button>
+      <button id="pauseBoth">PAUSE BOTH</button>
+      <button id="sync">SYNC START</button>
+      <button id="fullscreen">FULLSCREEN</button>
+      <button id="record">● REC</button>
+    </div>
+    <div class="meter"><span id="recMeter"></span></div>
+  </section>
+</div>
+
+<div id="videos">
+  <video id="videoA" playsinline muted></video>
+  <video id="videoB" playsinline muted></video>
+</div>
+
+<script>
+const canvas = document.getElementById('mixCanvas');
+const ctx = canvas.getContext('2d', {alpha:false});
+const videoA = document.getElementById('videoA');
+const videoB = document.getElementById('videoB');
+const stage = document.getElementById('stage');
+const statusEl = document.getElementById('status');
+
+const state = {
+  mirrorA:false, mirrorB:false,
+  recording:false, recorder:null, chunks:[], recStart:0
+};
+
+function resize(){
+  const r = stage.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(r.width * dpr);
+  canvas.height = Math.round(r.height * dpr);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function coverRect(vw, vh, cw, ch){
+  const s = Math.max(cw/vw, ch/vh);
+  const w = vw*s, h = vh*s;
+  return [(cw-w)/2, (ch-h)/2, w, h];
+}
+
+function drawVideo(video, opacity, mirror, composite){
+  if (!video.src || video.readyState < 2) return;
+  const [x,y,w,h] = coverRect(video.videoWidth, video.videoHeight, canvas.width, canvas.height);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+  ctx.globalCompositeOperation = composite;
+  if(mirror){
+    ctx.translate(canvas.width,0);
+    ctx.scale(-1,1);
+    ctx.drawImage(video, canvas.width-(x+w), y, w, h);
+  }else{
+    ctx.drawImage(video, x,y,w,h);
+  }
+  ctx.restore();
+}
+
+function render(){
+  const cross = +crossfade.value;
+  const aOp = +opacityA.value * (1-cross);
+  const bOp = +opacityB.value * cross;
+  const masterOp = +master.value;
+
+  ctx.globalCompositeOperation='source-over';
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.save();
+  ctx.globalAlpha = masterOp;
+  drawVideo(videoA, aOp, state.mirrorA, 'source-over');
+  drawVideo(videoB, bOp, state.mirrorB, blendMode.value);
+  ctx.restore();
+
+  if(state.recording){
+    const t = performance.now() - state.recStart;
+    recMeter.style.width = ((t % 2000) / 2000 * 100) + '%';
+  } else {
+    recMeter.style.width = '0%';
+  }
+  requestAnimationFrame(render);
+}
+render();
+
+function loadVideo(input, video, nameEl){
+  const file = input.files?.[0];
+  if(!file) return;
+  if(video.dataset.url) URL.revokeObjectURL(video.dataset.url);
+  const url = URL.createObjectURL(file);
+  video.dataset.url = url;
+  video.src = url;
+  video.loop = true;
+  video.load();
+  nameEl.textContent = file.name;
+  video.addEventListener('loadeddata', ()=> {
+    video.play().catch(()=>{});
+    statusEl.textContent = 'LIVE';
+  }, {once:true});
+}
+
+fileA.addEventListener('change',()=>loadVideo(fileA,videoA,nameA));
+fileB.addEventListener('change',()=>loadVideo(fileB,videoB,nameB));
+
+function togglePlay(video, btn){
+  if(!video.src) return;
+  if(video.paused){ video.play(); btn.textContent='PAUSE'; }
+  else{ video.pause(); btn.textContent='PLAY'; }
+}
+playA.onclick=()=>togglePlay(videoA,playA);
+playB.onclick=()=>togglePlay(videoB,playB);
+
+playBoth.onclick=()=>{
+  if(videoA.src) videoA.play();
+  if(videoB.src) videoB.play();
+  playA.textContent='PAUSE'; playB.textContent='PAUSE';
+};
+pauseBoth.onclick=()=>{
+  videoA.pause(); videoB.pause();
+  playA.textContent='PLAY'; playB.textContent='PLAY';
+};
+sync.onclick=()=>{
+  if(videoA.src) videoA.currentTime=0;
+  if(videoB.src) videoB.currentTime=0;
+  if(videoA.src) videoA.play();
+  if(videoB.src) videoB.play();
+  playA.textContent='PAUSE'; playB.textContent='PAUSE';
+};
+
+restartA.onclick=()=>{ if(videoA.src){videoA.currentTime=0;videoA.play();} };
+restartB.onclick=()=>{ if(videoB.src){videoB.currentTime=0;videoB.play();} };
+
+loopA.onclick=()=>{
+  videoA.loop=!videoA.loop;
+  loopA.classList.toggle('active',videoA.loop);
+};
+loopB.onclick=()=>{
+  videoB.loop=!videoB.loop;
+  loopB.classList.toggle('active',videoB.loop);
+};
+
+mirrorA.onclick=()=>{
+  state.mirrorA=!state.mirrorA;
+  mirrorA.classList.toggle('active',state.mirrorA);
+};
+mirrorB.onclick=()=>{
+  state.mirrorB=!state.mirrorB;
+  mirrorB.classList.toggle('active',state.mirrorB);
+};
+
+function bindRange(el,valEl,callback){
+  const update=()=>{
+    valEl.textContent=(+el.value).toFixed(2);
+    callback && callback(+el.value);
+  };
+  el.addEventListener('input',update); update();
+}
+bindRange(opacityA,opacityAVal);
+bindRange(opacityB,opacityBVal);
+bindRange(speedA,speedAVal,v=>videoA.playbackRate=v);
+bindRange(speedB,speedBVal,v=>videoB.playbackRate=v);
+bindRange(crossfade,crossfadeVal);
+bindRange(master,masterVal);
+
+fullscreen.onclick=async()=>{
+  try{
+    if(!document.fullscreenElement) await stage.requestFullscreen();
+    else await document.exitFullscreen();
+  }catch(e){console.warn(e);}
+};
+
+record.onclick=()=>{
+  if(state.recording){
+    state.recorder?.stop();
+    return;
+  }
+  if(!canvas.captureStream || !window.MediaRecorder){
+    alert('このブラウザは録画に対応していません。Chrome / Edge を推奨します。');
+    return;
+  }
+
+  const stream = canvas.captureStream(60);
+  let mime = 'video/webm;codecs=vp9';
+  if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm;codecs=vp8';
+  if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
+
+  const recorder = new MediaRecorder(stream, {mimeType:mime, videoBitsPerSecond:12000000});
+  state.recorder=recorder;
+  state.chunks=[];
+  recorder.ondataavailable=e=>{ if(e.data.size) state.chunks.push(e.data); };
+  recorder.onstop=()=>{
+    const blob = new Blob(state.chunks,{type:recorder.mimeType});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='live-mix-vj.webm';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    state.recording=false;
+    record.textContent='● REC';
+    record.classList.remove('active');
+    statusEl.textContent='LIVE';
+  };
+  recorder.start(1000);
+  state.recording=true;
+  state.recStart=performance.now();
+  record.textContent='■ STOP';
+  record.classList.add('active');
+  statusEl.textContent='REC';
+};
+
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){
+    e.preventDefault();
+    if(videoA.paused && videoB.paused) playBoth.click();
+    else pauseBoth.click();
+  }
+  if(e.key==='1') crossfade.value=0;
+  if(e.key==='2') crossfade.value=.5;
+  if(e.key==='3') crossfade.value=1;
+  crossfade.dispatchEvent(new Event('input'));
+});
+</script>
+</body>
+</html>
