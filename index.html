@@ -100,6 +100,7 @@ input[type=range]{width:100%;accent-color:#fff}
     <h3>VIDEO A</h3>
     <div class="buttonrow">
       <label class="filebtn">LOAD A<input id="fileA" type="file" accept="video/*"></label>
+      <button id="cameraA">CAMERA A</button>
       <button id="playA">PLAY</button>
       <button id="mirrorA">MIRROR</button>
       <button id="loopA" class="active">LOOP</button>
@@ -129,6 +130,7 @@ input[type=range]{width:100%;accent-color:#fff}
     <h3>VIDEO B</h3>
     <div class="buttonrow">
       <label class="filebtn">LOAD B<input id="fileB" type="file" accept="video/*"></label>
+      <button id="cameraB">CAMERA B</button>
       <button id="playB">PLAY</button>
       <button id="mirrorB">MIRROR</button>
       <button id="loopB" class="active">LOOP</button>
@@ -211,36 +213,51 @@ const statusEl = $('status');
 const videoA = $('videoA');
 const videoB = $('videoB');
 
-const fxA = document.createElement('canvas');
-const fxB = document.createElement('canvas');
-const bufA = document.createElement('canvas');
-const bufB = document.createElement('canvas');
-const tmp = document.createElement('canvas');
-const feedbackCanvasA = document.createElement('canvas');
-const feedbackCanvasB = document.createElement('canvas');
-
-const fxa = fxA.getContext('2d');
-const fxb = fxB.getContext('2d');
-const bfa = bufA.getContext('2d');
-const bfb = bufB.getContext('2d');
-const tctx = tmp.getContext('2d');
-const fba = feedbackCanvasA.getContext('2d');
-const fbb = feedbackCanvasB.getContext('2d');
+// Each channel uses: sourceCanvas -> ping -> pong -> output.
+// This prevents an FX from erasing its own source.
+function makeChannelBuffers(){
+  const source = document.createElement('canvas');
+  const ping = document.createElement('canvas');
+  const pong = document.createElement('canvas');
+  const output = document.createElement('canvas');
+  const feedback = document.createElement('canvas');
+  const sample = document.createElement('canvas');
+  return {
+    source, ping, pong, output, feedback, sample,
+    sourceCtx: source.getContext('2d'),
+    pingCtx: ping.getContext('2d'),
+    pongCtx: pong.getContext('2d'),
+    outputCtx: output.getContext('2d'),
+    feedbackCtx: feedback.getContext('2d'),
+    sampleCtx: sample.getContext('2d')
+  };
+}
+const chA = makeChannelBuffers();
+const chB = makeChannelBuffers();
 
 const state = {
   mirrorA:false, mirrorB:false,
   recording:false, recorder:null, chunks:[],
+  streamA:null, streamB:null,
   fxA:{rgb:false,glitch:false,pixel:false,half:false,feedback:false,invert:false},
   fxB:{rgb:false,glitch:false,pixel:false,half:false,feedback:false,invert:false}
 };
 
+function allCanvases(ch){
+  return [ch.source,ch.ping,ch.pong,ch.output,ch.feedback,ch.sample];
+}
 function resize(){
   const r = stage.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = Math.max(1, Math.round(r.width*dpr));
   const h = Math.max(1, Math.round(r.height*dpr));
   canvas.width=w; canvas.height=h;
-  [fxA,fxB,bufA,bufB,tmp,feedbackCanvasA,feedbackCanvasB].forEach(c=>{c.width=w;c.height=h});
+  [chA,chB].forEach(ch => {
+    [ch.source,ch.ping,ch.pong,ch.output,ch.feedback].forEach(c=>{c.width=w;c.height=h});
+    // sample is resized on demand for halftone.
+    ch.sample.width=Math.max(1,Math.round(w*.18));
+    ch.sample.height=Math.max(1,Math.round(h*.18));
+  });
 }
 window.addEventListener('resize',resize);
 resize();
@@ -250,169 +267,214 @@ function coverRect(vw,vh,cw,ch){
   const w=vw*s,h=vh*s;
   return [(cw-w)/2,(ch-h)/2,w,h];
 }
+
 function drawBase(video,c,mirror){
   c.save();
+  c.setTransform(1,0,0,1,0,0);
+  c.globalAlpha=1;
+  c.globalCompositeOperation='source-over';
+  c.filter='none';
   c.clearRect(0,0,c.canvas.width,c.canvas.height);
-  if(!video.src || video.readyState<2){ c.restore(); return false; }
+
+  if(video.readyState < 2 || !video.videoWidth || !video.videoHeight){
+    c.restore();
+    return false;
+  }
+
   const [x,y,w,h]=coverRect(video.videoWidth,video.videoHeight,c.canvas.width,c.canvas.height);
   if(mirror){
     c.translate(c.canvas.width,0);
     c.scale(-1,1);
     c.drawImage(video,c.canvas.width-(x+w),y,w,h);
-  }else c.drawImage(video,x,y,w,h);
+  }else{
+    c.drawImage(video,x,y,w,h);
+  }
   c.restore();
   return true;
 }
 
-function applyPixelate(src,dst,size){
-  const sw=Math.max(1,Math.floor(src.width/size));
-  const sh=Math.max(1,Math.floor(src.height/size));
-  tmp.width=sw; tmp.height=sh;
-  tctx.imageSmoothingEnabled=false;
-  tctx.clearRect(0,0,sw,sh);
-  tctx.drawImage(src,0,0,sw,sh);
-  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
-  dst.imageSmoothingEnabled=false;
-  dst.drawImage(tmp,0,0,dst.canvas.width,dst.canvas.height);
-  dst.imageSmoothingEnabled=true;
-  tmp.width=canvas.width; tmp.height=canvas.height;
+function clearCtx(c){
+  c.save();
+  c.setTransform(1,0,0,1,0,0);
+  c.globalAlpha=1;
+  c.globalCompositeOperation='source-over';
+  c.filter='none';
+  c.clearRect(0,0,c.canvas.width,c.canvas.height);
+  c.restore();
 }
 
-function applyRGBShift(src,dst,amt){
-  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
-  dst.globalCompositeOperation='source-over';
-  dst.globalAlpha=1;
-  dst.drawImage(src,0,0);
-
-  dst.save();
-  dst.globalCompositeOperation='screen';
-  dst.globalAlpha=.72;
-  dst.filter='sepia(1) saturate(10) hue-rotate(-55deg)';
-  dst.drawImage(src,-amt,0);
-  dst.filter='sepia(1) saturate(10) hue-rotate(65deg)';
-  dst.drawImage(src,amt,0);
-  dst.restore();
-  dst.filter='none';
-  dst.globalAlpha=1;
-  dst.globalCompositeOperation='source-over';
+function copyCanvas(src,dstCtx){
+  clearCtx(dstCtx);
+  dstCtx.drawImage(src,0,0);
 }
 
-function applyGlitch(src,dst,amt,t){
-  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
-  dst.drawImage(src,0,0);
+// FX functions always read one canvas and write a DIFFERENT canvas.
+function fxColor(src,dstCtx,hue,invert){
+  clearCtx(dstCtx);
+  dstCtx.save();
+  dstCtx.filter=`hue-rotate(${hue}deg) ${invert?'invert(1)':'invert(0)'}`;
+  dstCtx.drawImage(src,0,0);
+  dstCtx.restore();
+}
+
+function fxPixelate(src,dstCtx,size,ch){
+  const scale=Math.max(1,+size);
+  const sw=Math.max(1,Math.floor(src.width/scale));
+  const sh=Math.max(1,Math.floor(src.height/scale));
+
+  ch.sample.width=sw; ch.sample.height=sh;
+  const sctx=ch.sampleCtx;
+  sctx.imageSmoothingEnabled=false;
+  sctx.clearRect(0,0,sw,sh);
+  sctx.drawImage(src,0,0,sw,sh);
+
+  clearCtx(dstCtx);
+  dstCtx.imageSmoothingEnabled=false;
+  dstCtx.drawImage(ch.sample,0,0,dstCtx.canvas.width,dstCtx.canvas.height);
+  dstCtx.imageSmoothingEnabled=true;
+}
+
+function fxRGB(src,dstCtx,amt){
+  clearCtx(dstCtx);
+  dstCtx.drawImage(src,0,0);
+  dstCtx.save();
+  dstCtx.globalCompositeOperation='screen';
+  dstCtx.globalAlpha=.72;
+  dstCtx.filter='sepia(1) saturate(10) hue-rotate(-55deg)';
+  dstCtx.drawImage(src,-amt,0);
+  dstCtx.filter='sepia(1) saturate(10) hue-rotate(65deg)';
+  dstCtx.drawImage(src,amt,0);
+  dstCtx.restore();
+}
+
+function fxGlitch(src,dstCtx,amt,t){
+  clearCtx(dstCtx);
+  dstCtx.drawImage(src,0,0);
   if(amt<=0) return;
+
   const slices=Math.floor(3+amt*20);
   const maxShift=10+amt*100;
   for(let i=0;i<slices;i++){
     if(Math.random()>0.45+amt*.4) continue;
-    const h=Math.max(2,Math.floor(Math.random()*dst.canvas.height*.08));
-    const y=Math.floor(Math.random()*(dst.canvas.height-h));
+    const h=Math.max(2,Math.floor(Math.random()*dstCtx.canvas.height*.08));
+    const y=Math.floor(Math.random()*(dstCtx.canvas.height-h));
     const shift=(Math.random()*2-1)*maxShift;
-    dst.drawImage(src,0,y,src.width,h,shift,y,src.width,h);
+    dstCtx.drawImage(src,0,y,src.width,h,shift,y,src.width,h);
   }
   if(Math.random()<amt*.35){
-    dst.save();
-    dst.globalCompositeOperation='difference';
-    dst.globalAlpha=.15+amt*.35;
+    dstCtx.save();
+    dstCtx.globalCompositeOperation='difference';
+    dstCtx.globalAlpha=.15+amt*.35;
     const x=(Math.sin(t*.01)*.5+.5)*18*amt;
-    dst.drawImage(src,x,0);
-    dst.restore();
+    dstCtx.drawImage(src,x,0);
+    dstCtx.restore();
   }
 }
 
-function applyHalftone(src,dst,step){
-  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
+function fxHalftone(src,dstCtx,step,ch){
+  clearCtx(dstCtx);
 
-  const sampleScale=0.18;
-  const sw=Math.max(1,Math.floor(src.width*sampleScale));
-  const sh=Math.max(1,Math.floor(src.height*sampleScale));
-  tmp.width=sw;tmp.height=sh;
-  tctx.drawImage(src,0,0,sw,sh);
-  const data=tctx.getImageData(0,0,sw,sh).data;
+  const sw=Math.max(1,Math.floor(src.width*.16));
+  const sh=Math.max(1,Math.floor(src.height*.16));
+  ch.sample.width=sw; ch.sample.height=sh;
+  const sctx=ch.sampleCtx;
+  sctx.clearRect(0,0,sw,sh);
+  sctx.drawImage(src,0,0,sw,sh);
 
-  const sx=src.width/sw, sy=src.height/sh;
-  const gap=Math.max(3,step);
-  dst.fillStyle='#000';
-  dst.fillRect(0,0,dst.canvas.width,dst.canvas.height);
-
-  for(let y=0;y<sh;y+=Math.max(1,Math.round(gap/sy))){
-    for(let x=0;x<sw;x+=Math.max(1,Math.round(gap/sx))){
-      const i=(y*sw+x)*4;
-      const r=data[i],g=data[i+1],b=data[i+2];
-      const lum=(r+g+b)/765;
-      const rad=(gap*.52)*(1-lum*.72);
-      dst.fillStyle=`rgb(${r},${g},${b})`;
-      dst.beginPath();
-      dst.arc(x*sx,y*sy,Math.max(.8,rad),0,Math.PI*2);
-      dst.fill();
-    }
-  }
-  tmp.width=canvas.width;tmp.height=canvas.height;
-}
-
-function applyColorFilters(src,dst,hue,invert){
-  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
-  dst.save();
-  dst.filter=`hue-rotate(${hue}deg) ${invert?'invert(1)':'invert(0)'}`;
-  dst.drawImage(src,0,0);
-  dst.restore();
-  dst.filter='none';
-}
-
-function applyFeedback(src,dst,feedbackCtx,amt){
-  feedbackCtx.save();
-  feedbackCtx.globalAlpha=amt;
-  feedbackCtx.globalCompositeOperation='source-over';
-  feedbackCtx.drawImage(feedbackCtx.canvas,-2,-2,feedbackCtx.canvas.width+4,feedbackCtx.canvas.height+4);
-  feedbackCtx.globalAlpha=1;
-  feedbackCtx.globalCompositeOperation='screen';
-  feedbackCtx.drawImage(src,0,0);
-  feedbackCtx.restore();
-
-  dst.clearRect(0,0,dst.canvas.width,dst.canvas.height);
-  dst.drawImage(feedbackCtx.canvas,0,0);
-}
-
-function processChannel(video,mirror,fxState,controls,outCtx,bufCtx,feedbackCtx,t){
-  if(!drawBase(video,bufCtx,mirror)){
-    outCtx.clearRect(0,0,outCtx.canvas.width,outCtx.canvas.height);
+  let data;
+  try{
+    data=sctx.getImageData(0,0,sw,sh).data;
+  }catch(err){
+    // Fallback: never black out if pixel access fails.
+    dstCtx.drawImage(src,0,0);
     return;
   }
 
-  let src=bufCtx.canvas;
-  let dst=outCtx;
-  const scratch=bufCtx===bfa?fxa:fxb;
-  const alt=bufCtx===bfa?bfa:bfb;
+  const sx=src.width/sw, sy=src.height/sh;
+  const gap=Math.max(3,+step);
+  dstCtx.fillStyle='#000';
+  dstCtx.fillRect(0,0,dstCtx.canvas.width,dstCtx.canvas.height);
 
-  // start with color filters
-  applyColorFilters(src,dst,+controls.hue.value,fxState.invert);
-  src=dst.canvas;
+  const dx=Math.max(1,Math.round(gap/sx));
+  const dy=Math.max(1,Math.round(gap/sy));
+
+  for(let y=0;y<sh;y+=dy){
+    for(let x=0;x<sw;x+=dx){
+      const i=(y*sw+x)*4;
+      const r=data[i],g=data[i+1],b=data[i+2];
+      const lum=(r+g+b)/765;
+      const radius=Math.max(.8,(gap*.52)*(1-lum*.72));
+      dstCtx.fillStyle=`rgb(${r},${g},${b})`;
+      dstCtx.beginPath();
+      dstCtx.arc(x*sx,y*sy,radius,0,Math.PI*2);
+      dstCtx.fill();
+    }
+  }
+}
+
+function fxFeedback(src,dstCtx,ch,amt){
+  const fb=ch.feedbackCtx;
+  const c=ch.feedback;
+
+  // Preserve the prior feedback frame and gently zoom it.
+  const temp=ch.sample;
+  temp.width=c.width; temp.height=c.height;
+  ch.sampleCtx.clearRect(0,0,temp.width,temp.height);
+  ch.sampleCtx.drawImage(c,0,0);
+
+  fb.save();
+  fb.setTransform(1,0,0,1,0,0);
+  fb.globalCompositeOperation='source-over';
+  fb.globalAlpha=1;
+  fb.fillStyle='rgba(0,0,0,0.08)';
+  fb.fillRect(0,0,c.width,c.height);
+  fb.globalAlpha=amt;
+  fb.drawImage(temp,-3,-3,c.width+6,c.height+6);
+  fb.globalAlpha=1;
+  fb.globalCompositeOperation='screen';
+  fb.drawImage(src,0,0);
+  fb.restore();
+
+  copyCanvas(c,dstCtx);
+}
+
+function processChannel(video,mirror,fxState,controls,ch,t){
+  if(!drawBase(video,ch.sourceCtx,mirror)){
+    clearCtx(ch.outputCtx);
+    return;
+  }
+
+  let current=ch.source;
+  let writeCtx=ch.pingCtx;
+
+  // Always do the color stage first; ping/pong afterwards.
+  fxColor(current,writeCtx,+controls.hue.value,fxState.invert);
+  current=ch.ping;
+  let nextCtx=ch.pongCtx;
+
+  const runStage=(fn)=>{
+    fn(current,nextCtx);
+    current=nextCtx.canvas;
+    nextCtx=(nextCtx===ch.pingCtx)?ch.pongCtx:ch.pingCtx;
+  };
 
   if(fxState.pixel){
-    applyPixelate(src,alt,+controls.pixelAmt.value);
-    src=alt.canvas;
+    runStage((src,dst)=>fxPixelate(src,dst,+controls.pixelAmt.value,ch));
   }
   if(fxState.rgb){
-    applyRGBShift(src,dst,+controls.rgbAmt.value);
-    src=dst.canvas;
+    runStage((src,dst)=>fxRGB(src,dst,+controls.rgbAmt.value));
   }
   if(fxState.glitch){
-    applyGlitch(src,alt,+controls.glitchAmt.value,t);
-    src=alt.canvas;
+    runStage((src,dst)=>fxGlitch(src,dst,+controls.glitchAmt.value,t));
   }
   if(fxState.half){
-    applyHalftone(src,dst,+controls.halfAmt.value);
-    src=dst.canvas;
+    runStage((src,dst)=>fxHalftone(src,dst,+controls.halfAmt.value,ch));
   }
   if(fxState.feedback){
-    applyFeedback(src,alt,feedbackCtx,+controls.feedbackAmt.value);
-    src=alt.canvas;
+    runStage((src,dst)=>fxFeedback(src,dst,ch,+controls.feedbackAmt.value));
   }
 
-  if(src!==outCtx.canvas){
-    outCtx.clearRect(0,0,outCtx.canvas.width,outCtx.canvas.height);
-    outCtx.drawImage(src,0,0);
-  }
+  copyCanvas(current,ch.outputCtx);
 }
 
 const controlsA={
@@ -425,9 +487,11 @@ const controlsB={
 };
 
 function render(t=0){
-  processChannel(videoA,state.mirrorA,state.fxA,controlsA,fxa,bfa,fba,t);
-  processChannel(videoB,state.mirrorB,state.fxB,controlsB,fxb,bfb,fbb,t);
+  processChannel(videoA,state.mirrorA,state.fxA,controlsA,chA,t);
+  processChannel(videoB,state.mirrorB,state.fxB,controlsB,chB,t);
 
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.globalCompositeOperation='source-over';
   ctx.globalAlpha=1;
   ctx.fillStyle='#000';
@@ -436,70 +500,172 @@ function render(t=0){
   const cross=+$('crossfade').value;
   const master=+$('master').value;
 
-  ctx.save();
   ctx.globalAlpha=(1-cross)*+$('opacityA').value*master;
   ctx.globalCompositeOperation='source-over';
-  ctx.drawImage(fxA,0,0);
+  ctx.drawImage(chA.output,0,0);
 
   ctx.globalAlpha=cross*+$('opacityB').value*master;
   ctx.globalCompositeOperation=$('blendMode').value;
-  ctx.drawImage(fxB,0,0);
+  ctx.drawImage(chB.output,0,0);
   ctx.restore();
 
   if(state.recording){
     $('recMeter').style.width=((performance.now()-state.recStart)%2000)/20+'%';
-  }else $('recMeter').style.width='0%';
+  }else{
+    $('recMeter').style.width='0%';
+  }
 
   requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
 
-function loadVideo(input,video,nameEl){
+// ---------- VIDEO / CAMERA INPUT ----------
+function stopStream(key,buttonId){
+  const stream=state[key];
+  if(stream){
+    stream.getTracks().forEach(track=>track.stop());
+    state[key]=null;
+  }
+  $(buttonId).classList.remove('active');
+}
+
+function setFileVideo(input,video,nameEl,streamKey,cameraButtonId){
   const file=input.files?.[0];
   if(!file)return;
-  if(video.dataset.url)URL.revokeObjectURL(video.dataset.url);
+
+  stopStream(streamKey,cameraButtonId);
+  video.pause();
+  video.srcObject=null;
+
+  if(video.dataset.url) URL.revokeObjectURL(video.dataset.url);
   const url=URL.createObjectURL(file);
   video.dataset.url=url;
   video.src=url;
   video.loop=true;
+  video.muted=true;
+  video.playsInline=true;
   video.load();
   nameEl.textContent=file.name;
+
   video.addEventListener('loadeddata',()=>{
     video.play().catch(()=>{});
     statusEl.textContent='LIVE';
   },{once:true});
 }
-$('fileA').onchange=()=>loadVideo($('fileA'),videoA,$('nameA'));
-$('fileB').onchange=()=>loadVideo($('fileB'),videoB,$('nameB'));
 
+$('fileA').onchange=()=>setFileVideo($('fileA'),videoA,$('nameA'),'streamA','cameraA');
+$('fileB').onchange=()=>setFileVideo($('fileB'),videoB,$('nameB'),'streamB','cameraB');
+
+async function toggleCamera(which){
+  const isA=which==='A';
+  const video=isA?videoA:videoB;
+  const streamKey=isA?'streamA':'streamB';
+  const btnId=isA?'cameraA':'cameraB';
+  const nameId=isA?'nameA':'nameB';
+
+  if(state[streamKey]){
+    stopStream(streamKey,btnId);
+    video.srcObject=null;
+    video.removeAttribute('src');
+    video.load();
+    $(nameId).textContent='NO VIDEO';
+    return;
+  }
+
+  try{
+    // Stop a previously loaded object URL on this channel.
+    if(video.dataset.url){
+      URL.revokeObjectURL(video.dataset.url);
+      delete video.dataset.url;
+    }
+    video.pause();
+    video.removeAttribute('src');
+
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{
+        width:{ideal:1280},
+        height:{ideal:720},
+        frameRate:{ideal:30,max:60}
+      },
+      audio:false
+    });
+
+    state[streamKey]=stream;
+    video.srcObject=stream;
+    video.muted=true;
+    video.playsInline=true;
+    await video.play();
+
+    $(btnId).classList.add('active');
+    $(nameId).textContent='LIVE CAMERA';
+    statusEl.textContent='CAMERA LIVE';
+  }catch(err){
+    console.error(err);
+    statusEl.textContent='CAMERA ERROR';
+    alert(
+      'Webカメラを起動できませんでした。\\n\\n' +
+      '・ブラウザのカメラ許可を確認してください。\\n' +
+      '・GitHub PagesなどHTTPS環境で開いてください。\\n' +
+      '・file:// で直接開く場合、ブラウザによってはカメラが使えません。'
+    );
+  }
+}
+$('cameraA').onclick=()=>toggleCamera('A');
+$('cameraB').onclick=()=>toggleCamera('B');
+
+// ---------- PLAYBACK ----------
+function hasMedia(video){
+  return !!video.srcObject || !!video.currentSrc || !!video.src;
+}
 function togglePlay(video,btn){
-  if(!video.src)return;
-  if(video.paused){video.play();btn.textContent='PAUSE'}
-  else{video.pause();btn.textContent='PLAY'}
+  if(!hasMedia(video))return;
+  if(video.paused){
+    video.play().catch(()=>{});
+    btn.textContent='PAUSE';
+  }else{
+    video.pause();
+    btn.textContent='PLAY';
+  }
 }
 $('playA').onclick=()=>togglePlay(videoA,$('playA'));
 $('playB').onclick=()=>togglePlay(videoB,$('playB'));
+
 $('playBoth').onclick=()=>{
-  if(videoA.src)videoA.play();
-  if(videoB.src)videoB.play();
-  $('playA').textContent='PAUSE';$('playB').textContent='PAUSE'
+  if(hasMedia(videoA))videoA.play().catch(()=>{});
+  if(hasMedia(videoB))videoB.play().catch(()=>{});
+  $('playA').textContent='PAUSE';
+  $('playB').textContent='PAUSE';
 };
 $('pauseBoth').onclick=()=>{
   videoA.pause();videoB.pause();
-  $('playA').textContent='PLAY';$('playB').textContent='PLAY'
+  $('playA').textContent='PLAY';
+  $('playB').textContent='PLAY';
 };
 $('sync').onclick=()=>{
-  if(videoA.src)videoA.currentTime=0;
-  if(videoB.src)videoB.currentTime=0;
-  if(videoA.src)videoA.play();
-  if(videoB.src)videoB.play();
+  if(!videoA.srcObject && isFinite(videoA.duration)) videoA.currentTime=0;
+  if(!videoB.srcObject && isFinite(videoB.duration)) videoB.currentTime=0;
+  if(hasMedia(videoA))videoA.play().catch(()=>{});
+  if(hasMedia(videoB))videoB.play().catch(()=>{});
 };
 
-$('mirrorA').onclick=()=>{state.mirrorA=!state.mirrorA;$('mirrorA').classList.toggle('active',state.mirrorA)};
-$('mirrorB').onclick=()=>{state.mirrorB=!state.mirrorB;$('mirrorB').classList.toggle('active',state.mirrorB)};
-$('loopA').onclick=()=>{videoA.loop=!videoA.loop;$('loopA').classList.toggle('active',videoA.loop)};
-$('loopB').onclick=()=>{videoB.loop=!videoB.loop;$('loopB').classList.toggle('active',videoB.loop)};
+$('mirrorA').onclick=()=>{
+  state.mirrorA=!state.mirrorA;
+  $('mirrorA').classList.toggle('active',state.mirrorA);
+};
+$('mirrorB').onclick=()=>{
+  state.mirrorB=!state.mirrorB;
+  $('mirrorB').classList.toggle('active',state.mirrorB);
+};
+$('loopA').onclick=()=>{
+  videoA.loop=!videoA.loop;
+  $('loopA').classList.toggle('active',videoA.loop);
+};
+$('loopB').onclick=()=>{
+  videoB.loop=!videoB.loop;
+  $('loopB').classList.toggle('active',videoB.loop);
+};
 
+// ---------- FX UI ----------
 function toggleFx(which,key,btn){
   state[which][key]=!state[which][key];
   btn.classList.toggle('active',state[which][key]);
@@ -517,67 +683,98 @@ mapB.forEach(([id,key])=>$(id).onclick=()=>toggleFx('fxB',key,$(id)));
 
 function bindRange(id,valId,cb){
   const el=$(id), val=$(valId);
-  const update=()=>{val.textContent=(+el.value).toFixed(el.step && +el.step<1?2:0);cb&&cb(+el.value)};
-  el.oninput=update;update();
+  const update=()=>{
+    const n=+el.value;
+    val.textContent=n.toFixed(el.step && +el.step<1?2:0);
+    if(cb)cb(n);
+  };
+  el.addEventListener('input',update);
+  update();
 }
 [
-  ['opacityA','opacityAVal'],['speedA','speedAVal',v=>videoA.playbackRate=v],
+  ['opacityA','opacityAVal'],
+  ['speedA','speedAVal',v=>{ if(!videoA.srcObject) videoA.playbackRate=v; }],
   ['rgbAmtA','rgbAmtAVal'],['glitchAmtA','glitchAmtAVal'],
   ['pixelAmtA','pixelAmtAVal'],['halfAmtA','halfAmtAVal'],
   ['feedbackAmtA','feedbackAmtAVal'],['hueA','hueAVal'],
-  ['opacityB','opacityBVal'],['speedB','speedBVal',v=>videoB.playbackRate=v],
+
+  ['opacityB','opacityBVal'],
+  ['speedB','speedBVal',v=>{ if(!videoB.srcObject) videoB.playbackRate=v; }],
   ['rgbAmtB','rgbAmtBVal'],['glitchAmtB','glitchAmtBVal'],
   ['pixelAmtB','pixelAmtBVal'],['halfAmtB','halfAmtBVal'],
   ['feedbackAmtB','feedbackAmtBVal'],['hueB','hueBVal'],
+
   ['crossfade','crossfadeVal'],['master','masterVal']
 ].forEach(args=>bindRange(...args));
 
 $('resetFx').onclick=()=>{
-  for(const k in state.fxA)state.fxA[k]=false;
-  for(const k in state.fxB)state.fxB[k]=false;
+  Object.keys(state.fxA).forEach(k=>state.fxA[k]=false);
+  Object.keys(state.fxB).forEach(k=>state.fxB[k]=false);
   [...mapA,...mapB].forEach(([id])=>$(id).classList.remove('active'));
+
   $('hueA').value=0;$('hueB').value=0;
   $('rgbAmtA').value=10;$('rgbAmtB').value=10;
   $('glitchAmtA').value=.35;$('glitchAmtB').value=.35;
   $('pixelAmtA').value=10;$('pixelAmtB').value=10;
   $('halfAmtA').value=8;$('halfAmtB').value=8;
   $('feedbackAmtA').value=.72;$('feedbackAmtB').value=.72;
+
   document.querySelectorAll('input[type=range]').forEach(el=>el.dispatchEvent(new Event('input')));
-  fba.clearRect(0,0,feedbackCanvasA.width,feedbackCanvasA.height);
-  fbb.clearRect(0,0,feedbackCanvasB.width,feedbackCanvasB.height);
+  clearCtx(chA.feedbackCtx);
+  clearCtx(chB.feedbackCtx);
 };
 
+// ---------- FULLSCREEN / RECORD ----------
 $('fullscreen').onclick=async()=>{
   try{
-    if(!document.fullscreenElement)await stage.requestFullscreen();
+    if(!document.fullscreenElement) await stage.requestFullscreen();
     else await document.exitFullscreen();
-  }catch(e){console.warn(e)}
+  }catch(err){
+    console.warn(err);
+  }
 };
 
 $('record').onclick=()=>{
-  if(state.recording){state.recorder?.stop();return}
-  if(!canvas.captureStream||!window.MediaRecorder){
+  if(state.recording){
+    state.recorder?.stop();
+    return;
+  }
+  if(!canvas.captureStream || !window.MediaRecorder){
     alert('このブラウザは録画に対応していません。Chrome / Edge を推奨します。');
     return;
   }
+
   const stream=canvas.captureStream(60);
   let mime='video/webm;codecs=vp9';
-  if(!MediaRecorder.isTypeSupported(mime))mime='video/webm;codecs=vp8';
-  if(!MediaRecorder.isTypeSupported(mime))mime='video/webm';
-  const recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:12000000});
-  state.recorder=recorder;state.chunks=[];
-  recorder.ondataavailable=e=>{if(e.data.size)state.chunks.push(e.data)};
+  if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm;codecs=vp8';
+  if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
+
+  const recorder=new MediaRecorder(stream,{
+    mimeType:mime,
+    videoBitsPerSecond:12000000
+  });
+
+  state.recorder=recorder;
+  state.chunks=[];
+
+  recorder.ondataavailable=e=>{
+    if(e.data.size) state.chunks.push(e.data);
+  };
   recorder.onstop=()=>{
     const blob=new Blob(state.chunks,{type:recorder.mimeType});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
-    a.href=url;a.download='live-mix-vj-fx.webm';a.click();
+    a.href=url;
+    a.download='live-mix-vj-fx-camera.webm';
+    a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
+
     state.recording=false;
     $('record').textContent='● REC';
     $('record').classList.remove('active');
     statusEl.textContent='LIVE';
   };
+
   recorder.start(1000);
   state.recording=true;
   state.recStart=performance.now();
@@ -586,23 +783,65 @@ $('record').onclick=()=>{
   statusEl.textContent='REC';
 };
 
+// ---------- KEYBOARD ----------
+// Important: range sliders can remain focused after a mouse operation.
+// We therefore ignore shortcuts only while typing in textual fields or choosing a select.
 document.addEventListener('keydown',e=>{
-  if(['INPUT','SELECT'].includes(document.activeElement.tagName))return;
+  const tag=document.activeElement?.tagName;
+  const type=document.activeElement?.getAttribute?.('type');
+  const isTyping =
+    tag==='TEXTAREA' ||
+    tag==='SELECT' ||
+    (tag==='INPUT' && !['range','button','checkbox','radio'].includes(type));
+
+  if(isTyping) return;
+
+  const key=e.key.toLowerCase();
+
   if(e.code==='Space'){
     e.preventDefault();
-    if(videoA.paused&&videoB.paused)$('playBoth').click();
+    if(videoA.paused && videoB.paused) $('playBoth').click();
     else $('pauseBoth').click();
+    return;
   }
-  if(e.key==='1')$('crossfade').value=0;
-  if(e.key==='2')$('crossfade').value=.5;
-  if(e.key==='3')$('crossfade').value=1;
-  if(['1','2','3'].includes(e.key))$('crossfade').dispatchEvent(new Event('input'));
 
-  const keysA={q:'rgbA',w:'glitchA',e:'pixelA',r:'halfA',t:'feedbackA',y:'invertA'};
-  const keysB={a:'rgbB',s:'glitchB',d:'pixelB',f:'halfB',g:'feedbackB',h:'invertB'};
-  const k=e.key.toLowerCase();
-  if(keysA[k])$(keysA[k]).click();
-  if(keysB[k])$(keysB[k]).click();
+  if(['1','2','3'].includes(key)){
+    e.preventDefault();
+    $('crossfade').value = key==='1' ? 0 : key==='2' ? .5 : 1;
+    $('crossfade').dispatchEvent(new Event('input'));
+    return;
+  }
+
+  const keysA={
+    q:'rgbA',
+    w:'glitchA',
+    e:'pixelA',
+    r:'halfA',
+    t:'feedbackA',
+    y:'invertA'
+  };
+  const keysB={
+    a:'rgbB',
+    s:'glitchB',
+    d:'pixelB',
+    f:'halfB',
+    g:'feedbackB',
+    h:'invertB'
+  };
+
+  if(keysA[key]){
+    e.preventDefault();
+    $(keysA[key]).click();
+  }else if(keysB[key]){
+    e.preventDefault();
+    $(keysB[key]).click();
+  }
+});
+
+// Cleanup camera tracks if the page is closed.
+window.addEventListener('beforeunload',()=>{
+  stopStream('streamA','cameraA');
+  stopStream('streamB','cameraB');
 });
 </script>
 </body>
