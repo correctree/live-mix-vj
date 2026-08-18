@@ -80,7 +80,12 @@ input[type=range]{width:100%;accent-color:#fff}
 .stockactions{display:flex;gap:4px}.stockactions button{flex:1;padding:5px 3px;font-size:9px}
 .handstatus{font-size:9px;line-height:1.5;color:#aaa;border:1px solid var(--line);border-radius:7px;padding:7px;margin-top:7px}
 .handdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#555;margin-right:5px}.handdot.on{background:#fff}
-#handPreview{display:none}
+#handPreview{
+  display:none;position:absolute;right:14px;bottom:14px;width:220px;height:165px;
+  object-fit:cover;transform:scaleX(-1);z-index:20;border:1px solid rgba(255,255,255,.3);
+  border-radius:8px;background:#000
+}
+#handPreview.show{display:block}
 
 @media(max-width:900px){
   #panel{height:46vh;grid-template-columns:1fr 1fr}
@@ -208,6 +213,7 @@ input[type=range]{width:100%;accent-color:#fff}
     <div class="buttonrow">
       <button id="handControl">START HAND</button>
       <button id="handCalibrate">CENTER HUE</button>
+      <button id="handDebug">SHOW CAMERA</button>
     </div>
     <div id="handStatus" class="handstatus">
       <span id="handDot" class="handdot"></span><span id="handText">HAND OFF</span><br>
@@ -959,195 +965,366 @@ window.vjStock = {
 </script>
 
 <script type="module">
-import vision from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm";
-const {HandLandmarker, FilesetResolver} = vision;
+import {
+  HandLandmarker,
+  FilesetResolver
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
 
-const hv=document.getElementById('handPreview');
-const btn=document.getElementById('handControl');
-const dot=document.getElementById('handDot');
-const text=document.getElementById('handText');
+const hv = document.getElementById('handPreview');
+const btn = document.getElementById('handControl');
+const dot = document.getElementById('handDot');
+const text = document.getElementById('handText');
+const debugBtn = document.getElementById('handDebug');
 
-let tracker=null, stream=null, running=false, lastTime=-1;
+let tracker = null;
+let stream = null;
+let running = false;
+let lastVideoTime = -1;
+let lastTimestamp = 0;
+let detectorBusy = false;
+
 const handHistory = {
-  Left: {x:null, y:null, time:0, cooldownUntil:0},
-  Right:{x:null, y:null, time:0, cooldownUntil:0}
+  Left:  {x:null, y:null, time:0, cooldownUntil:0},
+  Right: {x:null, y:null, time:0, cooldownUntil:0}
 };
 
-function setRange(id,v){
-  const el=document.getElementById(id); if(!el)return;
-  const min=+el.min||0,max=+el.max||1;
-  el.value=Math.max(min,Math.min(max,v));
-  el.dispatchEvent(new Event('input',{bubbles:true}));
+function status(message){
+  text.textContent = message;
 }
-function setFx(id,on){
-  const b=document.getElementById(id); if(!b)return;
-  if(b.classList.contains('active')!==on)b.click();
+function setRange(id, v){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const min = Number(el.min || 0);
+  const max = Number(el.max || 1);
+  el.value = Math.max(min, Math.min(max, v));
+  el.dispatchEvent(new Event('input', {bubbles:true}));
 }
-function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y,(a.z||0)-(b.z||0))}
-function finger(lm,tip,pip){return dist(lm[0],lm[tip])>dist(lm[0],lm[pip])*1.12}
-function gesture(lm){
-  const scale=Math.max(.04,dist(lm[0],lm[9]));
-  const pd=dist(lm[4],lm[8])/scale;
-  const pinch=pd<.48;
-  const count=[finger(lm,8,6),finger(lm,12,10),finger(lm,16,14),finger(lm,20,18)].filter(Boolean).length;
-  return {pinch,pd,fist:count<=1&&!pinch,open:count>=4&&!pinch};
+function setFx(id, on){
+  const b = document.getElementById(id);
+  if(!b) return;
+  if(b.classList.contains('active') !== on) b.click();
 }
-function applyDeckControls(hand,lm){
-  const deck=hand==='Left'?'A':'B';
-  const g=gesture(lm);
+function dist(a,b){
+  return Math.hypot(a.x-b.x, a.y-b.y, (a.z||0)-(b.z||0));
+}
+function fingerExtended(lm, tip, pip){
+  return dist(lm[0],lm[tip]) > dist(lm[0],lm[pip]) * 1.12;
+}
+function classify(lm){
+  const scale = Math.max(.04, dist(lm[0],lm[9]));
+  const pinchDistance = dist(lm[4],lm[8]) / scale;
+  const pinch = pinchDistance < .48;
+  const extendedCount = [
+    fingerExtended(lm,8,6),
+    fingerExtended(lm,12,10),
+    fingerExtended(lm,16,14),
+    fingerExtended(lm,20,18)
+  ].filter(Boolean).length;
 
-  // Horizontal hand position controls HUE continuously.
-  const x=1-lm[0].x;
-  setRange('hue'+deck,Math.round(x*360)%360);
+  return {
+    pinch,
+    pinchDistance,
+    fist: extendedCount <= 1 && !pinch,
+    open: extendedCount >= 4 && !pinch
+  };
+}
+function applyDeckControls(hand, lm){
+  const deck = hand === 'Left' ? 'A' : 'B';
+  const g = classify(lm);
 
-  // PINCH -> RGB SHIFT
-  setFx('rgb'+deck,g.pinch);
+  // Mirror x for performer-facing control.
+  const x = 1 - lm[0].x;
+  setRange('hue'+deck, Math.round(x*360)%360);
+
+  setFx('rgb'+deck, g.pinch);
   if(g.pinch){
-    const strength=Math.max(0,Math.min(1,(.48-g.pd)/.35));
-    setRange('rgbAmt'+deck,4+strength*36);
+    const strength = Math.max(0, Math.min(1, (.48-g.pinchDistance)/.35));
+    setRange('rgbAmt'+deck, 4 + strength*36);
   }
 
-  // FIST -> GLITCH
-  setFx('glitch'+deck,g.fist);
-  if(g.fist)setRange('glitchAmt'+deck,Math.max(.12,Math.min(1,1-lm[0].y)));
+  setFx('glitch'+deck, g.fist);
+  if(g.fist){
+    setRange('glitchAmt'+deck, Math.max(.12, Math.min(1, 1-lm[0].y)));
+  }
 
-  // OPEN -> PIXELATE
-  setFx('pixel'+deck,g.open);
-  if(g.open)setRange('pixelAmt'+deck,4+(1-lm[0].y)*40);
+  setFx('pixel'+deck, g.open);
+  if(g.open){
+    setRange('pixelAmt'+deck, 4 + (1-lm[0].y)*40);
+  }
 }
 function releaseMissing(seen){
   ['Left','Right'].forEach(hand=>{
-    if(seen.has(hand))return;
-    const d=hand==='Left'?'A':'B';
-    setFx('rgb'+d,false);
-    setFx('glitch'+d,false);
-    setFx('pixel'+d,false);
+    if(seen.has(hand)) return;
+    const deck = hand === 'Left' ? 'A' : 'B';
+    setFx('rgb'+deck,false);
+    setFx('glitch'+deck,false);
+    setFx('pixel'+deck,false);
   });
 }
 function detectSwipe(hand, lm, now){
-  const hx = handHistory[hand];
-  const x = 1 - lm[0].x;  // mirrored for performer-friendly direction
+  const h = handHistory[hand];
+  const x = 1 - lm[0].x;
   const y = lm[0].y;
 
-  if(hx.x !== null){
-    const dt = now - hx.time;
-    const dx = x - hx.x;
-    const dy = y - hx.y;
+  if(h.x !== null){
+    const dt = now - h.time;
+    const dx = x - h.x;
+    const dy = y - h.y;
 
-    // Any clear horizontal swipe triggers "next stock" on that hand's deck.
     if(
-      now > hx.cooldownUntil &&
-      dt > 40 && dt < 260 &&
-      Math.abs(dx) > 0.16 &&
-      Math.abs(dx) > Math.abs(dy) * 1.35
+      now > h.cooldownUntil &&
+      dt > 40 && dt < 280 &&
+      Math.abs(dx) > .15 &&
+      Math.abs(dx) > Math.abs(dy)*1.3
     ){
       const deck = hand === 'Left' ? 'A' : 'B';
-      if(window.vjStock && window.vjStock.stockLibrary.length){
+      if(window.vjStock?.stockLibrary?.length){
         window.vjStock.nextStock(deck);
-        hx.cooldownUntil = now + 850;
+        h.cooldownUntil = now + 900;
       }
     }
   }
 
-  hx.x = x;
-  hx.y = y;
-  hx.time = now;
+  h.x = x;
+  h.y = y;
+  h.time = now;
 }
-function applyBothHandsCrossfade(leftLm, rightLm){
+function applyCrossfade(leftLm, rightLm){
   if(!leftLm || !rightLm) return;
-
-  // Distance between both wrists controls crossfade:
-  // far apart -> VIDEO A side, close together -> VIDEO B side.
   const d = dist(leftLm[0], rightLm[0]);
-  const near = 0.12;
-  const far  = 0.65;
-  const normalized = Math.max(0, Math.min(1, (far - d) / (far - near)));
-  setRange('crossfade', normalized);
+  const near = .12;
+  const far = .65;
+  const value = Math.max(0, Math.min(1, (far-d)/(far-near)));
+  setRange('crossfade', value);
 }
-async function init(){
-  if(tracker)return;
-  text.textContent='LOADING MEDIAPIPE…';
-  const fs=await FilesetResolver.forVisionTasks(
+
+async function createTracker(delegate){
+  const fileset = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
   );
-  tracker=await HandLandmarker.createFromOptions(fs,{
+
+  return await HandLandmarker.createFromOptions(fileset,{
     baseOptions:{
-      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-      delegate:"GPU"
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate
     },
     runningMode:"VIDEO",
     numHands:2,
-    minHandDetectionConfidence:.55,
-    minHandPresenceConfidence:.55,
-    minTrackingConfidence:.5
+    minHandDetectionConfidence:.45,
+    minHandPresenceConfidence:.45,
+    minTrackingConfidence:.45
   });
 }
-async function start(){
+
+async function initTracker(){
+  if(tracker) return;
+
+  status('MODEL: LOADING…');
+
   try{
-    await init();
-    stream=await navigator.mediaDevices.getUserMedia({
-      video:{width:{ideal:640},height:{ideal:480},frameRate:{ideal:30,max:30}},
-      audio:false
-    });
-    hv.srcObject=stream; await hv.play();
-    running=true;
-    btn.textContent='STOP HAND';
+    tracker = await createTracker('GPU');
+    status('MODEL: GPU READY');
+  }catch(gpuError){
+    console.warn('MediaPipe GPU initialization failed. Falling back to CPU.', gpuError);
+    status('GPU FAILED → CPU…');
+    tracker = await createTracker('CPU');
+    status('MODEL: CPU READY');
+  }
+}
+
+async function openCamera(){
+  status('CAMERA: REQUESTING…');
+
+  stream = await navigator.mediaDevices.getUserMedia({
+    video:{
+      facingMode:'user',
+      width:{ideal:640},
+      height:{ideal:480},
+      frameRate:{ideal:30,max:30}
+    },
+    audio:false
+  });
+
+  hv.srcObject = stream;
+  hv.muted = true;
+  hv.playsInline = true;
+
+  await new Promise((resolve,reject)=>{
+    const timer = setTimeout(()=>reject(new Error('Camera metadata timeout')),8000);
+
+    const ready = ()=>{
+      clearTimeout(timer);
+      resolve();
+    };
+
+    if(hv.readyState >= 1) ready();
+    else hv.addEventListener('loadedmetadata', ready, {once:true});
+  });
+
+  await hv.play();
+
+  if(!hv.videoWidth || !hv.videoHeight){
+    throw new Error('Camera returned no usable video frames.');
+  }
+
+  status(`CAMERA READY ${hv.videoWidth}×${hv.videoHeight}`);
+}
+
+async function start(){
+  if(running) return;
+
+  try{
+    if(!window.isSecureContext){
+      throw new Error('Camera requires HTTPS or localhost.');
+    }
+    if(!navigator.mediaDevices?.getUserMedia){
+      throw new Error('getUserMedia is not available in this browser.');
+    }
+
+    btn.disabled = true;
+    status('STARTING…');
+
+    await initTracker();
+    await openCamera();
+
+    running = true;
+    lastVideoTime = -1;
+    lastTimestamp = 0;
+    detectorBusy = false;
+
+    btn.textContent = 'STOP HAND';
     btn.classList.add('active');
+    btn.disabled = false;
     dot.classList.add('on');
-    text.textContent='HAND LIVE';
+    status('HAND LIVE : SEARCHING');
+
     requestAnimationFrame(loop);
   }catch(err){
-    console.error(err);
-    text.textContent='HAND ERROR';
-    alert('ハンドトラッキングを開始できませんでした。HTTPS環境・カメラ許可・インターネット接続を確認してください。');
+    console.error('Hand tracking startup error:', err);
+
+    running = false;
+    btn.disabled = false;
+    btn.textContent = 'START HAND';
+    btn.classList.remove('active');
+    dot.classList.remove('on');
+
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+      stream = null;
+    }
+    hv.srcObject = null;
+
+    status('ERROR: '+(err?.message || 'UNKNOWN'));
+
+    alert(
+      'ハンドトラッキングを開始できませんでした。\\n\\n' +
+      (err?.message || err) +
+      '\\n\\n画面下の HAND CONTROL にエラー内容も表示します。'
+    );
   }
 }
 function stop(){
-  running=false;
-  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
-  hv.srcObject=null;
-  btn.textContent='START HAND';
+  running = false;
+
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+    stream = null;
+  }
+
+  hv.pause();
+  hv.srcObject = null;
+
+  btn.disabled = false;
+  btn.textContent = 'START HAND';
   btn.classList.remove('active');
   dot.classList.remove('on');
-  text.textContent='HAND OFF';
-  ['A','B'].forEach(d=>{
-    setFx('rgb'+d,false);
-    setFx('glitch'+d,false);
-    setFx('pixel'+d,false);
+  status('HAND OFF');
+
+  ['A','B'].forEach(deck=>{
+    setFx('rgb'+deck,false);
+    setFx('glitch'+deck,false);
+    setFx('pixel'+deck,false);
   });
 }
-function loop(now){
-  if(!running||!tracker)return;
-  if(hv.readyState>=2&&hv.currentTime!==lastTime){
-    lastTime=hv.currentTime;
-    const r=tracker.detectForVideo(hv,performance.now());
-    const seen=new Set();
-    let leftLm=null, rightLm=null;
 
-    (r.landmarks||[]).forEach((lm,i)=>{
-      const hand=r.handednesses?.[i]?.[0]?.categoryName||'Right';
-      seen.add(hand);
-      applyDeckControls(hand,lm);
-      detectSwipe(hand, lm, now || performance.now());
-      if(hand==='Left') leftLm = lm;
-      else rightLm = lm;
-    });
+function loop(){
+  if(!running || !tracker) return;
 
-    releaseMissing(seen);
-    if(leftLm && rightLm) applyBothHandsCrossfade(leftLm, rightLm);
+  try{
+    if(
+      hv.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      hv.videoWidth > 0 &&
+      hv.videoHeight > 0 &&
+      hv.currentTime !== lastVideoTime &&
+      !detectorBusy
+    ){
+      detectorBusy = true;
+      lastVideoTime = hv.currentTime;
 
-    text.textContent=seen.size
-      ? 'HAND LIVE : '+[...seen].join(' + ')
-      : 'HAND LIVE : SEARCHING';
+      // MediaPipe expects monotonically increasing timestamps in milliseconds.
+      let timestamp = performance.now();
+      if(timestamp <= lastTimestamp) timestamp = lastTimestamp + 1;
+      lastTimestamp = timestamp;
+
+      const result = tracker.detectForVideo(hv, timestamp);
+      const seen = new Set();
+
+      let leftLm = null;
+      let rightLm = null;
+
+      (result.landmarks || []).forEach((lm,i)=>{
+        const hand =
+          result.handednesses?.[i]?.[0]?.categoryName ||
+          result.handedness?.[i]?.[0]?.categoryName ||
+          'Right';
+
+        seen.add(hand);
+        applyDeckControls(hand,lm);
+        detectSwipe(hand,lm,timestamp);
+
+        if(hand === 'Left') leftLm = lm;
+        else rightLm = lm;
+      });
+
+      releaseMissing(seen);
+      if(leftLm && rightLm) applyCrossfade(leftLm,rightLm);
+
+      status(
+        seen.size
+          ? 'HAND LIVE : '+[...seen].join(' + ')
+          : 'HAND LIVE : SEARCHING'
+      );
+
+      detectorBusy = false;
+    }
+  }catch(err){
+    console.error('MediaPipe frame detection error:',err);
+    detectorBusy = false;
+    status('DETECT ERROR: '+(err?.message || 'UNKNOWN'));
   }
+
   requestAnimationFrame(loop);
 }
-btn.onclick=()=>running?stop():start();
-document.getElementById('handCalibrate').onclick=()=>{
+
+btn.addEventListener('click',()=>{
+  if(running) stop();
+  else start();
+});
+
+debugBtn.addEventListener('click',()=>{
+  hv.classList.toggle('show');
+  debugBtn.textContent = hv.classList.contains('show')
+    ? 'HIDE CAMERA'
+    : 'SHOW CAMERA';
+});
+
+document.getElementById('handCalibrate').addEventListener('click',()=>{
   setRange('hueA',0);
   setRange('hueB',0);
-  setRange('crossfade',0.5);
-};
+  setRange('crossfade',.5);
+});
+
 window.addEventListener('beforeunload',stop);
 </script>
 
