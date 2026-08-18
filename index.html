@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column}
 }
 
 #panel{
-  height:360px;
+  height:430px;
   display:grid;
   grid-template-columns:1fr 1fr .9fr;
   background:var(--panel);
@@ -73,6 +73,14 @@ input[type=range]{width:100%;accent-color:#fff}
 .meter span{display:block;width:0;height:100%;background:#eee}
 .tip{font-size:9px;color:#707070;line-height:1.5;margin-top:9px}
 #videos{display:none}
+.stockbar{display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;min-height:80px}
+.stockitem{flex:0 0 118px;border:1px solid var(--line);border-radius:7px;padding:5px;background:#101010}
+.stockitem video{display:block;width:100%;height:52px;object-fit:cover;background:#000;border-radius:4px}
+.stockname{font-size:8px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:4px 0}
+.stockactions{display:flex;gap:4px}.stockactions button{flex:1;padding:5px 3px;font-size:9px}
+.handstatus{font-size:9px;line-height:1.5;color:#aaa;border:1px solid var(--line);border-radius:7px;padding:7px;margin-top:7px}
+.handdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#555;margin-right:5px}.handdot.on{background:#fff}
+#handPreview{display:none}
 
 @media(max-width:900px){
   #panel{height:46vh;grid-template-columns:1fr 1fr}
@@ -188,11 +196,32 @@ input[type=range]{width:100%;accent-color:#fff}
     </div>
 
     <div class="meter"><span id="recMeter"></span></div>
+
+    <h4>VIDEO STOCK</h4>
+    <div class="buttonrow">
+      <label class="filebtn">+ ADD STOCK<input id="stockFiles" type="file" accept="video/*" multiple></label>
+      <button id="clearStock">CLEAR STOCK</button>
+    </div>
+    <div id="stockBar" class="stockbar"></div>
+
+    <h4>HAND CONTROL</h4>
+    <div class="buttonrow">
+      <button id="handControl">START HAND</button>
+      <button id="handCalibrate">CENTER HUE</button>
+    </div>
+    <div id="handStatus" class="handstatus">
+      <span id="handDot" class="handdot"></span><span id="handText">HAND OFF</span><br>
+      LEFT → VIDEO A / RIGHT → VIDEO B<br>
+      SWIPE LEFT HAND → NEXT A / SWIPE RIGHT HAND → NEXT B<br>
+      BOTH HANDS CLOSE → CROSSFADE / PINCH → RGB / FIST → GLITCH / OPEN → PIXELATE / X POSITION → HUE
+    </div>
+
     <div class="tip">
       SPACE: PLAY/PAUSE BOTH<br>
       1: A / 2: 50:50 / 3: B<br>
       Q/W/E/R/T/Y/U = FX A toggle<br>
-      A/S/D/F/G/H/J = FX B toggle
+      A/S/D/F/G/H/J = FX B toggle<br>
+      HAND: swipe left/right hand = next stock, bring both hands closer = crossfade
     </div>
   </section>
 </div>
@@ -200,6 +229,7 @@ input[type=range]{width:100%;accent-color:#fff}
 <div id="videos">
   <video id="videoA" playsinline muted></video>
   <video id="videoB" playsinline muted></video>
+  <video id="handPreview" playsinline muted></video>
 </div>
 
 <script>
@@ -844,5 +874,282 @@ window.addEventListener('beforeunload',()=>{
   stopStream('streamB','cameraB');
 });
 </script>
+
+<script>
+// VIDEO STOCK
+const stockLibrary = [];
+const deckStockIndex = { A:-1, B:-1 };
+
+function assignStock(item, deck, index = -1){
+  const isA = deck === 'A';
+  const video = document.getElementById(isA ? 'videoA' : 'videoB');
+  const name = document.getElementById(isA ? 'nameA' : 'nameB');
+  const streamKey = isA ? 'streamA' : 'streamB';
+  const camId = isA ? 'cameraA' : 'cameraB';
+
+  if (typeof stopStream === 'function') stopStream(streamKey, camId);
+  video.pause();
+  video.srcObject = null;
+  video.src = item.url;
+  video.loop = true;
+  video.muted = true;
+  video.playsInline = true;
+  video.load();
+  name.textContent = item.file.name;
+
+  if(index >= 0) deckStockIndex[deck] = index;
+
+  video.addEventListener('loadeddata', () => {
+    video.currentTime = 0;
+    video.play().catch(()=>{});
+    document.getElementById(isA ? 'playA' : 'playB').textContent='PAUSE';
+    document.getElementById('status').textContent='STOCK '+deck;
+  }, {once:true});
+}
+
+function nextStock(deck){
+  if(!stockLibrary.length) return;
+  const current = deckStockIndex[deck] >= 0 ? deckStockIndex[deck] : -1;
+  const next = (current + 1) % stockLibrary.length;
+  assignStock(stockLibrary[next], deck, next);
+}
+
+function drawStock(){
+  const bar = document.getElementById('stockBar');
+  bar.innerHTML='';
+  stockLibrary.forEach((item,i)=>{
+    const card=document.createElement('div');
+    card.className='stockitem';
+
+    const pv=document.createElement('video');
+    pv.src=item.url; pv.muted=true; pv.loop=true; pv.playsInline=true; pv.preload='metadata';
+    pv.onmouseenter=()=>pv.play().catch(()=>{});
+    pv.onmouseleave=()=>{pv.pause(); try{pv.currentTime=0}catch(e){}};
+
+    const n=document.createElement('div');
+    n.className='stockname';
+    n.textContent=String(i+1).padStart(2,'0')+' '+item.file.name;
+
+    const acts=document.createElement('div');
+    acts.className='stockactions';
+    const a=document.createElement('button'); a.textContent='→ A'; a.onclick=()=>assignStock(item,'A',i);
+    const b=document.createElement('button'); b.textContent='→ B'; b.onclick=()=>assignStock(item,'B',i);
+    acts.append(a,b); card.append(pv,n,acts); bar.append(card);
+  });
+}
+document.getElementById('stockFiles').addEventListener('change',e=>{
+  [...(e.target.files||[])].forEach(file=>stockLibrary.push({file,url:URL.createObjectURL(file)}));
+  drawStock(); e.target.value='';
+});
+document.getElementById('clearStock').onclick=()=>{
+  stockLibrary.forEach(x=>URL.revokeObjectURL(x.url));
+  stockLibrary.length=0;
+  deckStockIndex.A = -1;
+  deckStockIndex.B = -1;
+  drawStock();
+};
+
+// expose for hand-control script
+window.vjStock = {
+  nextStock,
+  assignStock,
+  stockLibrary,
+  deckStockIndex
+};
+</script>
+
+<script type="module">
+import vision from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm";
+const {HandLandmarker, FilesetResolver} = vision;
+
+const hv=document.getElementById('handPreview');
+const btn=document.getElementById('handControl');
+const dot=document.getElementById('handDot');
+const text=document.getElementById('handText');
+
+let tracker=null, stream=null, running=false, lastTime=-1;
+const handHistory = {
+  Left: {x:null, y:null, time:0, cooldownUntil:0},
+  Right:{x:null, y:null, time:0, cooldownUntil:0}
+};
+
+function setRange(id,v){
+  const el=document.getElementById(id); if(!el)return;
+  const min=+el.min||0,max=+el.max||1;
+  el.value=Math.max(min,Math.min(max,v));
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function setFx(id,on){
+  const b=document.getElementById(id); if(!b)return;
+  if(b.classList.contains('active')!==on)b.click();
+}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y,(a.z||0)-(b.z||0))}
+function finger(lm,tip,pip){return dist(lm[0],lm[tip])>dist(lm[0],lm[pip])*1.12}
+function gesture(lm){
+  const scale=Math.max(.04,dist(lm[0],lm[9]));
+  const pd=dist(lm[4],lm[8])/scale;
+  const pinch=pd<.48;
+  const count=[finger(lm,8,6),finger(lm,12,10),finger(lm,16,14),finger(lm,20,18)].filter(Boolean).length;
+  return {pinch,pd,fist:count<=1&&!pinch,open:count>=4&&!pinch};
+}
+function applyDeckControls(hand,lm){
+  const deck=hand==='Left'?'A':'B';
+  const g=gesture(lm);
+
+  // Horizontal hand position controls HUE continuously.
+  const x=1-lm[0].x;
+  setRange('hue'+deck,Math.round(x*360)%360);
+
+  // PINCH -> RGB SHIFT
+  setFx('rgb'+deck,g.pinch);
+  if(g.pinch){
+    const strength=Math.max(0,Math.min(1,(.48-g.pd)/.35));
+    setRange('rgbAmt'+deck,4+strength*36);
+  }
+
+  // FIST -> GLITCH
+  setFx('glitch'+deck,g.fist);
+  if(g.fist)setRange('glitchAmt'+deck,Math.max(.12,Math.min(1,1-lm[0].y)));
+
+  // OPEN -> PIXELATE
+  setFx('pixel'+deck,g.open);
+  if(g.open)setRange('pixelAmt'+deck,4+(1-lm[0].y)*40);
+}
+function releaseMissing(seen){
+  ['Left','Right'].forEach(hand=>{
+    if(seen.has(hand))return;
+    const d=hand==='Left'?'A':'B';
+    setFx('rgb'+d,false);
+    setFx('glitch'+d,false);
+    setFx('pixel'+d,false);
+  });
+}
+function detectSwipe(hand, lm, now){
+  const hx = handHistory[hand];
+  const x = 1 - lm[0].x;  // mirrored for performer-friendly direction
+  const y = lm[0].y;
+
+  if(hx.x !== null){
+    const dt = now - hx.time;
+    const dx = x - hx.x;
+    const dy = y - hx.y;
+
+    // Any clear horizontal swipe triggers "next stock" on that hand's deck.
+    if(
+      now > hx.cooldownUntil &&
+      dt > 40 && dt < 260 &&
+      Math.abs(dx) > 0.16 &&
+      Math.abs(dx) > Math.abs(dy) * 1.35
+    ){
+      const deck = hand === 'Left' ? 'A' : 'B';
+      if(window.vjStock && window.vjStock.stockLibrary.length){
+        window.vjStock.nextStock(deck);
+        hx.cooldownUntil = now + 850;
+      }
+    }
+  }
+
+  hx.x = x;
+  hx.y = y;
+  hx.time = now;
+}
+function applyBothHandsCrossfade(leftLm, rightLm){
+  if(!leftLm || !rightLm) return;
+
+  // Distance between both wrists controls crossfade:
+  // far apart -> VIDEO A side, close together -> VIDEO B side.
+  const d = dist(leftLm[0], rightLm[0]);
+  const near = 0.12;
+  const far  = 0.65;
+  const normalized = Math.max(0, Math.min(1, (far - d) / (far - near)));
+  setRange('crossfade', normalized);
+}
+async function init(){
+  if(tracker)return;
+  text.textContent='LOADING MEDIAPIPE…';
+  const fs=await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+  );
+  tracker=await HandLandmarker.createFromOptions(fs,{
+    baseOptions:{
+      modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate:"GPU"
+    },
+    runningMode:"VIDEO",
+    numHands:2,
+    minHandDetectionConfidence:.55,
+    minHandPresenceConfidence:.55,
+    minTrackingConfidence:.5
+  });
+}
+async function start(){
+  try{
+    await init();
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{width:{ideal:640},height:{ideal:480},frameRate:{ideal:30,max:30}},
+      audio:false
+    });
+    hv.srcObject=stream; await hv.play();
+    running=true;
+    btn.textContent='STOP HAND';
+    btn.classList.add('active');
+    dot.classList.add('on');
+    text.textContent='HAND LIVE';
+    requestAnimationFrame(loop);
+  }catch(err){
+    console.error(err);
+    text.textContent='HAND ERROR';
+    alert('ハンドトラッキングを開始できませんでした。HTTPS環境・カメラ許可・インターネット接続を確認してください。');
+  }
+}
+function stop(){
+  running=false;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  hv.srcObject=null;
+  btn.textContent='START HAND';
+  btn.classList.remove('active');
+  dot.classList.remove('on');
+  text.textContent='HAND OFF';
+  ['A','B'].forEach(d=>{
+    setFx('rgb'+d,false);
+    setFx('glitch'+d,false);
+    setFx('pixel'+d,false);
+  });
+}
+function loop(now){
+  if(!running||!tracker)return;
+  if(hv.readyState>=2&&hv.currentTime!==lastTime){
+    lastTime=hv.currentTime;
+    const r=tracker.detectForVideo(hv,performance.now());
+    const seen=new Set();
+    let leftLm=null, rightLm=null;
+
+    (r.landmarks||[]).forEach((lm,i)=>{
+      const hand=r.handednesses?.[i]?.[0]?.categoryName||'Right';
+      seen.add(hand);
+      applyDeckControls(hand,lm);
+      detectSwipe(hand, lm, now || performance.now());
+      if(hand==='Left') leftLm = lm;
+      else rightLm = lm;
+    });
+
+    releaseMissing(seen);
+    if(leftLm && rightLm) applyBothHandsCrossfade(leftLm, rightLm);
+
+    text.textContent=seen.size
+      ? 'HAND LIVE : '+[...seen].join(' + ')
+      : 'HAND LIVE : SEARCHING';
+  }
+  requestAnimationFrame(loop);
+}
+btn.onclick=()=>running?stop():start();
+document.getElementById('handCalibrate').onclick=()=>{
+  setRange('hueA',0);
+  setRange('hueB',0);
+  setRange('crossfade',0.5);
+};
+window.addEventListener('beforeunload',stop);
+</script>
+
 </body>
 </html>
